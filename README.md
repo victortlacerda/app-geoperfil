@@ -1,2 +1,1 @@
-remover edição
-adicionar exportar dxf
+melhorar lançamento de camadas NSPT
