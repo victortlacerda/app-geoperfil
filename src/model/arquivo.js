@@ -8,6 +8,8 @@ export function carregarProjeto(dados) {
   const p = novoProjeto(dados.projeto?.nome || 'Projeto');
   p.projeto = { ...p.projeto, ...(dados.projeto || {}) };
   if (p.projeto.modoSPT !== 'golpes') p.projeto.modoSPT = 'metro';
+  if (p.projeto.crs !== 'utm') p.projeto.crs = 'local';
+  if (!['mapa', 'satelite', 'nenhum'].includes(p.projeto.fundo)) p.projeto.fundo = 'mapa';
   p.cores = Object.fromEntries(Object.entries(dados.cores || {}).filter(([, v]) => /^#[0-9a-f]{6}$/i.test(String(v))));
   p.furos = (dados.furos || []).map((f) => novoFuro(f));
   p.cortes = (dados.cortes || []).map((c) => ({

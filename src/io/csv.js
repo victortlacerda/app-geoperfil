@@ -2,11 +2,15 @@
 // As colunas são reconhecidas pelo cabeçalho; a coluna "furo" é obrigatória.
 import { novoFuro, setCampoMetro, aplicarCamadas, camadasDoFuro, textoSPTValido, num } from '../model/projeto.js';
 import { soloPorCodigo, secPorValor } from '../model/catalogo.js';
+import { geoParaUtm, ehGeorreferenciado, utmPlausivel, FUSO_PADRAO } from '../geo/coordenadas.js';
+import { garantirUTM } from './geo.js';
 
 const ALIASES = {
   furo: ['furo', 'sondagem', 'id', 'nome', 'sp', 'furo_id'],
   x: ['x', 'leste', 'e', 'este', 'coord_x', 'coordenada_x'],
   y: ['y', 'norte', 'coord_y', 'coordenada_y'],
+  lat: ['lat', 'latitude'],
+  lon: ['lon', 'long', 'longitude', 'lng'],
   cota: ['cota', 'cota_boca', 'cota_da_boca', 'z'],
   na: ['na', 'nivel_dagua', 'nivel_d_agua', 'nivel_agua', 'n_a'],
   profTotal: ['prof_total', 'profundidade_total', 'limite', 'prof_max', 'profundidade_maxima'],
@@ -97,6 +101,15 @@ export function aplicarImportacao(projeto, registros) {
       if (Number.isFinite(v)) { f[campo] = v; if (campo === 'x' || campo === 'y') { coordInformada.add(nome); semCoord.delete(nome); } }
     }
 
+    const lat = num(r.lat, NaN), lon = num(r.lon, NaN);
+    if (Number.isFinite(lat) && Number.isFinite(lon) && r.x === undefined && r.y === undefined) {
+      const { fuso, mudou } = garantirUTM(projeto, lat, lon);
+      if (mudou) res.avisos.push(`O projeto passou a usar UTM SIRGAS 2000, fuso ${fuso}.`);
+      const u = geoParaUtm(lat, lon, fuso);
+      f.x = +u.x.toFixed(3); f.y = +u.y.toFixed(3);
+      coordInformada.add(nome); semCoord.delete(nome);
+    }
+
     const de = num(r.de, NaN), ate = num(r.ate, NaN);
     if (r.de !== undefined || r.ate !== undefined) {
       if (!Number.isFinite(de) || !Number.isFinite(ate) || ate <= de) ignoradas.push(idx + 1);
@@ -121,6 +134,14 @@ export function aplicarImportacao(projeto, registros) {
     const sobrepoe = (c) => novas.some((n) => c.de < n.ate && n.de < c.ate);
     aplicarCamadas(f, [...novas, ...camadasDoFuro(f).filter((c) => !sobrepoe(c))].sort((a, b) => a.de - b.de));
   });
+
+  // coordenadas com cara de UTM num projeto local: passa a usar UTM
+  const comXY = projeto.furos.filter((f) => coordInformada.has(f.nome));
+  if (!ehGeorreferenciado(projeto) && comXY.length && comXY.every((f) => utmPlausivel(f.x, f.y, projeto.projeto.fusoUTM || FUSO_PADRAO))) {
+    projeto.projeto.crs = 'utm';
+    projeto.projeto.fusoUTM = projeto.projeto.fusoUTM || FUSO_PADRAO;
+    res.avisos.push(`As coordenadas parecem UTM: o projeto passou a usar UTM SIRGAS 2000, fuso ${projeto.projeto.fusoUTM}. Confira o fuso na planta.`);
+  }
 
   // furos novos sem coordenadas: espalha em linha ao lado dos existentes
   const semXY = projeto.furos.filter((f) => semCoord.has(f.nome) && !coordInformada.has(f.nome));

@@ -31,6 +31,15 @@ describe('interpretação de tabelas', () => {
 });
 
 describe('aplicação da importação', () => {
+  it('latitude/longitude viram UTM (e o projeto passa a usar o fuso do ponto)', () => {
+    const p = novoProjeto();
+    const { registros } = interpretarTabela([['furo', 'latitude', 'longitude', 'cota'], ['MZ', '-23.55052', '-46.63395', '760']]);
+    aplicarImportacao(p, registros);
+    expect(p.projeto).toMatchObject({ crs: 'utm', fusoUTM: '23S' });
+    expect(p.furos[0].x).toBeCloseTo(333221.582, 2);
+    expect(p.furos[0].y).toBeCloseTo(7394585.348, 2);
+  });
+
   it('cria furos com coordenadas, camadas e SPT por profundidade', () => {
     const p = novoProjeto();
     const { registros } = interpretarTabela(lerCSV(MODELO_CSV));
@@ -40,7 +49,8 @@ describe('aplicação da importação', () => {
     expect([sp1.x, sp1.y, sp1.cota, sp1.na]).toEqual([333120.45, 7394210.8, 842.5, 3.2]);
     expect(camadasDoFuro(sp1).map((c) => [c.de, c.ate, c.codigo, c.origem])).toEqual([[0, 2, 'ARGS', 'ATR'], [2, 6, 'ARGA', 'RES'], [6, 9, 'AREA', 'RES']]);
     expect(sptPorMetro(sp1)).toEqual({ 1: 3, 2: 4, 3: 5, 4: 6 });
-    expect(r.avisos).toEqual([]);
+    expect(p.projeto.crs).toBe('utm'); // coordenadas UTM num projeto local: passa a usar UTM
+    expect(r.avisos.join(' ')).toMatch(/UTM SIRGAS 2000, fuso 23S/);
   });
 
   it('N-SPT sem profundidade é ignorado com aviso', () => {

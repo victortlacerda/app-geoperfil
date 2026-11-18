@@ -11,6 +11,8 @@ import { lerCSV, interpretarTabela, aplicarImportacao, MODELO_CSV, MODELO_XLSX }
 import { baixar, lerTexto, lerXLSX, escreverXLSX, nomeArquivo } from './io/arquivos.js';
 import { corFuro, OK, ACCENT } from './styles/tema.js';
 import { definirCoresProjeto } from './model/catalogo.js';
+import { FUSOS, epsgDoFuso, utmParaGeo, geoParaUtm, ehGeorreferenciado, utmPlausivel } from './geo/coordenadas.js';
+import { exportarGeoJSON, exportarKML, lerGeoJSON, lerKML, aplicarPontos } from './io/geo.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -80,6 +82,7 @@ function renderSidebar() {
 
 function render() {
   definirCoresProjeto(store.doc.cores);
+  sincronizarCoordenadas();
   validarSelecao();
   renderSidebar();
   if (document.activeElement !== $('faixaInput')) sincronizarFaixa();
@@ -119,20 +122,68 @@ $('faixaTodos').addEventListener('change', aplicarFaixa);
 $('faixaAmbos').addEventListener('change', aplicarFaixa);
 
 // ── modal de furo ────────────────────────────────────────
+// ── sistema de coordenadas ───────────────────────────────
+$('fusoSelect').innerHTML = FUSOS.map((f) => `<option value="${f}">${f}</option>`).join('');
+function sincronizarCoordenadas() {
+  const p = store.doc.projeto, geo = ehGeorreferenciado(store.doc);
+  $('crsSelect').value = geo ? 'utm' : 'local';
+  $('fusoSelect').value = p.fusoUTM || '23S';
+  $('fundoSelect').value = p.fundo || 'mapa';
+  $('grupoUTM').hidden = !geo;
+  $('epsgLabel').textContent = geo ? `EPSG:${epsgDoFuso(p.fusoUTM || '23S')}` : '';
+}
+function mudarCoordenadas() {
+  const crs = $('crsSelect').value, fuso = $('fusoSelect').value, fundo = $('fundoSelect').value;
+  const antes = store.doc.projeto;
+  store.commit((d) => { Object.assign(d.projeto, { crs, fusoUTM: fuso, fundo }); });
+  if (crs === 'utm' && (antes.crs !== 'utm' || antes.fusoUTM !== fuso)) {
+    const estranhos = store.doc.furos.filter((f) => !utmPlausivel(f.x, f.y, fuso));
+    if (estranhos.length) toast(`${estranhos.length} furo(s) têm coordenadas que não parecem UTM do fuso ${fuso} (ex.: ${estranhos[0].nome}: ${estranhos[0].x}; ${estranhos[0].y}). Confira as coordenadas.`, 8000);
+  }
+  planta.ajustar();
+}
+['crsSelect', 'fusoSelect', 'fundoSelect'].forEach((id) => $(id).addEventListener('change', mudarCoordenadas));
+
+// ── modal de furo ────────────────────────────────────────
+function rotulosModal() {
+  const geoDig = ehGeorreferenciado(store.doc) && $('mSist').value === 'geo';
+  $('mXLabel').textContent = geoDig ? 'Latitude (°)' : 'Coord. X — Leste (m)';
+  $('mYLabel').textContent = geoDig ? 'Longitude (°)' : 'Coord. Y — Norte (m)';
+}
+$('mSist').addEventListener('change', () => {
+  // converte o que já está digitado para o outro sistema
+  const fz = store.doc.projeto.fusoUTM, a = num($('mX').value, NaN), b = num($('mY').value, NaN);
+  if (Number.isFinite(a) && Number.isFinite(b)) {
+    if ($('mSist').value === 'geo') { const g = utmParaGeo(a, b, fz); $('mX').value = g.lat.toFixed(7); $('mY').value = g.lon.toFixed(7); }
+    else { const u = geoParaUtm(a, b, fz); $('mX').value = u.x.toFixed(2); $('mY').value = u.y.toFixed(2); }
+  }
+  rotulosModal();
+});
 function abrirModalFuro(pos = null) {
-  const v = ui.planta;
+  const v = ui.planta, geo = ehGeorreferenciado(store.doc);
+  $('mSistWrap').hidden = !geo;
+  if (!geo) $('mSist').value = 'utm';
+  rotulosModal();
   $('mId').value = proximoNome(store.doc.furos);
-  $('mX').value = pos ? pos.x : +v.cx.toFixed(2);
-  $('mY').value = pos ? pos.y : +v.cy.toFixed(2);
+  const centro = geo && planta.mapa() ? (() => { const c = planta.mapa().getCenter(); return geoParaUtm(c.lat, c.lng, store.doc.projeto.fusoUTM); })() : { x: v.cx, y: v.cy };
+  let px = pos ? pos.x : +centro.x.toFixed(2), py = pos ? pos.y : +centro.y.toFixed(2);
+  if (geo && $('mSist').value === 'geo') { const g = utmParaGeo(px, py, store.doc.projeto.fusoUTM); px = g.lat.toFixed(7); py = g.lon.toFixed(7); }
+  $('mX').value = px;
+  $('mY').value = py;
   ['mCota', 'mLimite', 'mNA'].forEach((id) => { $(id).value = ''; });
   $('bhModal').classList.add('open');
-  setTimeout(() => $('mId').select(), 30);
+  $('mId').focus(); $('mId').select();
 }
 $('bhForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const nome = $('mId').value.trim();
   if (store.doc.furos.some((f) => f.nome === nome)) { toast(`Já existe um furo "${nome}".`); $('mId').select(); return; }
-  const f = novoFuro({ nome, x: num($('mX').value), y: num($('mY').value), cota: num($('mCota').value), profTotal: num($('mLimite').value), na: num($('mNA').value) });
+  let x = num($('mX').value), y = num($('mY').value);
+  if (ehGeorreferenciado(store.doc) && $('mSist').value === 'geo') {
+    if (Math.abs(x) > 90 || Math.abs(y) > 180) { toast('Latitude deve estar entre −90 e 90 e longitude entre −180 e 180.'); return; }
+    const u = geoParaUtm(x, y, store.doc.projeto.fusoUTM); x = +u.x.toFixed(3); y = +u.y.toFixed(3);
+  }
+  const f = novoFuro({ nome, x, y, cota: num($('mCota').value), profTotal: num($('mLimite').value), na: num($('mNA').value) });
   store.commit((d) => { d.furos.push(f); });
   ui.furoId = f.id;
   fecharModais();
@@ -147,6 +198,15 @@ let importacao = null; // { nome, texto?, tabelas: [{ aba, linhas }] }
 async function carregarArquivoImportacao(file) {
   try {
     const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'kml' || ext === 'geojson' || (ext === 'json' && /"FeatureCollection"|"Feature"/.test(await lerTexto(file)))) {
+      const texto = await lerTexto(file);
+      const pontos = ext === 'kml' ? lerKML(texto) : lerGeoJSON(texto);
+      if (!pontos.length) { toast('Nenhum ponto encontrado no arquivo.'); return; }
+      const r = store.commit((d) => aplicarPontos(d, pontos));
+      fecharModais(); planta.ajustar();
+      toast([`Importado de ${file.name}: ${r.novos} furo(s) novo(s), ${r.atualizados} atualizado(s).`, ...r.avisos].join(' '), 8000);
+      return;
+    }
     if (ext === 'xlsx') importacao = { nome: file.name, tabelas: (await lerXLSX(file)).map((a) => ({ aba: a.sheet, linhas: a.data })) };
     else { const texto = await lerTexto(file); importacao = { nome: file.name, texto, tabelas: [{ aba: '', linhas: lerCSV(texto, $('csvSep').value) }] }; }
     mostrarPreviaImportacao();
@@ -228,6 +288,14 @@ const acoes = {
   salvar() { store.salvarAgora(); baixar(serializar(store.doc), nomeArquivo(store.doc.projeto.nome, 'json'), 'application/json'); },
   importar() { $('csvModal').classList.add('open'); },
   escolherCSV() { $('fileCSV').click(); },
+  exportarGeoJSON() {
+    try { baixar(exportarGeoJSON(store.doc), nomeArquivo(store.doc.projeto.nome, 'geojson'), 'application/geo+json'); }
+    catch (e) { toast(e.message, 6000); }
+  },
+  exportarKML() {
+    try { baixar(exportarKML(store.doc), nomeArquivo(store.doc.projeto.nome, 'kml'), 'application/vnd.google-earth.kml+xml'); }
+    catch (e) { toast(e.message, 6000); }
+  },
   confirmarCSV() { confirmarImportacao(); },
   modeloCSV() { baixar('﻿' + MODELO_CSV, 'modelo_geoperfil.csv', 'text/csv;charset=utf-8'); },
   async modeloXLSX() { try { await escreverXLSX(MODELO_XLSX, 'modelo_geoperfil.xlsx'); } catch (e) { toast('Erro ao gerar o modelo: ' + e.message); } },
@@ -299,4 +367,4 @@ requestAnimationFrame(() => {
 });
 
 // acesso para depuração e testes de ponta a ponta
-window.geoperfil = { store, ui, render, furosNoCorte, camadasDoFuro };
+window.geoperfil = { store, ui, render, furosNoCorte, camadasDoFuro, planta, utmParaGeo, geoParaUtm };

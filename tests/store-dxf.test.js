@@ -30,7 +30,7 @@ describe('store', () => {
     const s = criarStore(projetoExemplo());
     for (let i = 0; i < 5; i++) s.commit((d) => { d.furos[0].x += 1; }, { agrupar: 'mover' });
     s.desfazer();
-    expect(s.doc.furos[0].x).toBe(40);
+    expect(s.doc.furos[0].x).toBe(333040);
   });
 
   it('nova alteração apaga o refazer', () => {
@@ -55,7 +55,7 @@ describe('store', () => {
 
 describe('DXF', () => {
   const p = projetoExemplo();
-  const corte = { id: 'c', nome: "A–A'", p1: [30, 425], p2: [210, 425], lado: -1, faixa: 100 };
+  const corte = { id: 'c', nome: "A–A'", p1: [333030, 7394025], p2: [333210, 7394025], lado: -1, faixa: 100 };
   p.cortes.push(corte);
   const bhs = perfilDoCorte(corte, p.furos);
   const dxf = gerarDXF(p, { bhs, ext: extensaoCotas(bhs), maxDist: Math.max(...bhs.map((b) => b.dist)), corte });

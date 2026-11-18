@@ -6,8 +6,8 @@ App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento d
 
 ## Funcionalidades
 
-- **Planta** em coordenadas reais (metros, Norte para cima), com zoom pela roda do mouse, pan (botão do meio ou espaço + arrastar) e furos arrastáveis.
-- **Cortes** com faixa simétrica: entram os furos a até *N* metros da linha, dos dois lados (ou todos os furos). A seta indica o sentido de vista.
+- **Planta georreferenciada**: coordenadas UTM SIRGAS 2000 (fusos 18–25 S e 18–22 N) com mapa de fundo OpenStreetMap ou satélite, ou coordenadas locais sem mapa. Furos podem ser lançados em UTM ou em latitude/longitude, arrastados no mapa, e há uma ferramenta para medir distâncias.
+- **Cortes**: o lado clicado define quais furos entram (ou os dois lados, como opção), dentro de uma faixa de distância à linha.
 - **Boletim metro a metro** por furo: profundidade limite, critério de parada, NA e cota no topo; os metros já aparecem prontos para preencher.
   - Classificação sem valor padrão. Metro vazio repete a classificação de cima, então AREA no 1 m e AREA no 5 m formam uma camada só. Metros seguidos com a mesma classificação viram uma camada.
   - Enter ou Tab vão para o próximo metro; a alça ▪ arrasta a classificação para outros metros; dá para colar colunas do Excel.
@@ -15,8 +15,8 @@ App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento d
   - Cada classificação tem uma cor só no projeto inteiro (editável).
   - **Boletim em PDF** do furo: perfil com hachuras, classificação e descrição, N-SPT, gráfico, NA e fim da sondagem.
 - **Perfil 2D** com hachuras, régua de SPT, NA, impenetrável, eixo em cota ou profundidade e zoom.
-- **Exportação**: DXF R12 (planta + perfil, layers por solo), PDF pela impressão do navegador e projeto em JSON.
-- **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, cota, na, prof_total, de, ate, primario, secundario, prof, nspt`), inclusive planilhas com abas separadas.
+- **Exportação**: DXF R12 (planta + perfil, layers por solo), PDF pela impressão do navegador, projeto em JSON e furos/cortes em **GeoJSON** e **KML** (Google Earth).
+- **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`), inclusive planilhas com abas separadas, e de pontos em GeoJSON/KML.
 - **Desfazer/refazer** (Ctrl+Z / Ctrl+Y) e salvamento automático no navegador.
 
 ## Desenvolvimento
@@ -46,12 +46,12 @@ tests/             testes unitários
 
 ## Formato do projeto (v2)
 
-Tudo em metros. `x` = Leste, `y` = Norte. `metros` guarda só o que foi digitado; o metro *m* vai de *m − 1* a *m*. Classificação vazia repete a de cima, e as camadas são calculadas a partir disso.
+Tudo em metros. `x` = Leste, `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` quando `crs` = `utm`; coordenadas locais quando `crs` = `local`). `metros` guarda só o que foi digitado; o metro *m* vai de *m − 1* a *m*. Classificação vazia repete a de cima, e as camadas são calculadas a partir disso.
 
 ```json
 {
   "version": 2,
-  "projeto": { "nome": "Obra X", "crs": "local", "fusoUTM": "23S" },
+  "projeto": { "nome": "Obra X", "crs": "utm", "fusoUTM": "23S", "fundo": "mapa", "modoSPT": "metro" },
   "cores": { "ARE": "#97C459" },
   "furos": [{ "id": "…", "nome": "SP-01", "x": 40, "y": 400, "cota": 842.5, "na": 3.2,
               "profTotal": 15.45, "parada": "imp_percussao",
@@ -67,7 +67,7 @@ Tudo em metros. `x` = Leste, `y` = Norte. `metros` guarda só o que foi digitado
 - [x] Fase 0 — Fundação (Vite, módulos, store, desfazer/refazer, testes, deploy)
 - [x] Fase 1 — Correções e modelo de dados v2
 - [x] Fase 2 — Boletim metro a metro e boletim em PDF
-- [ ] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000)
+- [x] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000, GeoJSON/KML)
 - [ ] Fase 4 — Perfil 2D v2 (contatos interpolados)
 - [ ] Fase 5 — Modelo 3D com three.js
 - [ ] Fase 6 — Integrações e portfólio

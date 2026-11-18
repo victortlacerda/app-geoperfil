@@ -5,6 +5,7 @@ import {
   textoSPTValido, num, LINHAS_PADRAO,
 } from '../model/projeto.js';
 import { ajustarCanvas, hachurar } from './hatch.js';
+import { utmParaGeo, geoParaUtm, ehGeorreferenciado } from '../geo/coordenadas.js';
 import { ACCENT, PERIGO, ALERTA, OK, corFuro } from '../styles/tema.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -192,6 +193,14 @@ export function criarCamadas(app) {
       else editarFuro((f) => { f[campo] = Math.max(campo === 'profTotal' ? 0 : -Infinity, num(el.value, campo === 'profTotal' ? 0 : f[campo])); });
     });
   });
+  document.querySelectorAll('#infoGeo [data-geo]').forEach((el) => {
+    el.addEventListener('change', () => {
+      const lat = num(document.getElementById('infoLat').value, NaN), lon = num(document.getElementById('infoLon').value, NaN);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) { render(); return; }
+      const u = geoParaUtm(lat, lon, app.store.doc.projeto.fusoUTM);
+      editarFuro((f) => { f.x = +u.x.toFixed(3); f.y = +u.y.toFixed(3); });
+    });
+  });
   document.getElementById('listaCores').addEventListener('change', (e) => {
     const code = e.target.dataset.cor; if (!code) return;
     app.store.commit((d) => { d.cores = { ...(d.cores || {}), [code]: e.target.value }; });
@@ -210,6 +219,9 @@ export function criarCamadas(app) {
     const cams = camadasDoFuro(f), nN = Object.keys(sptPorMetro(f)).length;
     document.getElementById('headResumo').textContent = `${fmt(profMax(f))} m · ${cams.length} camada(s) · ${nN} N-SPT`;
     set('infoNome', f.nome); set('infoX', f.x); set('infoY', f.y);
+    const geo = ehGeorreferenciado(app.store.doc);
+    document.getElementById('infoGeo').hidden = !geo;
+    if (geo) { const g = utmParaGeo(f.x, f.y, app.store.doc.projeto.fusoUTM); set('infoLat', g.lat.toFixed(7)); set('infoLon', g.lon.toFixed(7)); }
     document.getElementById('btn-modo-metro').classList.toggle('active', modo() === 'metro');
     document.getElementById('btn-modo-golpes').classList.toggle('active', modo() === 'golpes');
   }

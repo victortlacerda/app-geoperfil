@@ -50,7 +50,7 @@ export function novoFuro(d = {}) {
 }
 
 export function novoProjeto(nome = 'Novo projeto') {
-  return { version: VERSAO, projeto: { nome, crs: 'local', fusoUTM: '23S', modoSPT: 'metro' }, cores: {}, furos: [], cortes: [] };
+  return { version: VERSAO, projeto: { nome, crs: 'local', fusoUTM: '23S', fundo: 'mapa', modoSPT: 'metro' }, cores: {}, furos: [], cortes: [] };
 }
 
 // ── edição de metros ─────────────────────────────────────
@@ -221,20 +221,22 @@ export function resolverFuro(f) {
 const cam = (de, ate, codigo, origem, descricao = '') => ({ de, ate, codigo, origem, descricao });
 const sptLista = (obj) => Object.entries(obj).map(([p, n]) => ({ prof: +p, n }));
 
-/** Projeto de exemplo com 4 furos. */
+/** Projeto de exemplo com 4 furos, em UTM SIRGAS 2000 fuso 23S. */
+export const EXEMPLO_E0 = 333000, EXEMPLO_N0 = 7393600;
 export function projetoExemplo() {
   const p = novoProjeto('Exemplo');
+  p.projeto.crs = 'utm';
   p.furos = [
-    novoFuro({ nome: 'SP-01', x: 40, y: 400, cota: 842.5, na: 3.2, profTotal: 15, parada: 'imp_percussao',
+    novoFuro({ nome: 'SP-01', x: EXEMPLO_E0 + 40, y: EXEMPLO_N0 + 400, cota: 842.5, na: 3.2, profTotal: 15, parada: 'imp_percussao',
       camadas: [cam(0, 2, 'ARGS', 'ATR', 'Argila siltosa marrom com entulho'), cam(2, 6, 'ARGA', 'RES', 'Argila arenosa vermelha, mole a média'), cam(6, 9, 'AREA', 'RES', 'Areia fina argilosa amarela, fofa'), cam(9, 14, 'SAR', 'RES', 'Silte arenoso variegado, compacto'), cam(14, 15, 'SAG', 'RFR', 'Silte argiloso com fragmentos de rocha')],
       spt: sptLista({ 1: 3, 2: 4, 3: 5, 4: 6, 5: 8, 6: 9, 7: 11, 8: 15, 9: 18, 10: 22, 11: 28, 12: 35, 13: 42, 14: 50, 15: '30/10' }) }),
-    novoFuro({ nome: 'SP-02', x: 115, y: 407.5, cota: 839.0, na: 2.8, profTotal: 12, parada: 'projeto',
+    novoFuro({ nome: 'SP-02', x: EXEMPLO_E0 + 115, y: EXEMPLO_N0 + 407.5, cota: 839.0, na: 2.8, profTotal: 12, parada: 'projeto',
       camadas: [cam(0, 2, 'ARGS', 'ATR'), cam(2, 6, 'ARGA', 'RES'), cam(6, 12, 'ARS', 'RES')],
       spt: sptLista({ 1: 2, 2: 3, 3: 4, 4: 5, 5: 7, 6: 10, 7: 14, 8: 20, 9: 26, 10: 34, 11: 40, 12: 48 }) }),
-    novoFuro({ nome: 'SP-03', x: 195, y: 402.5, cota: 845.2, na: 4.5, profTotal: 20, parada: 'imp_percussao',
+    novoFuro({ nome: 'SP-03', x: EXEMPLO_E0 + 195, y: EXEMPLO_N0 + 402.5, cota: 845.2, na: 4.5, profTotal: 20, parada: 'imp_percussao',
       camadas: [cam(0, 3, 'SAG', 'ATR'), cam(3, 8, 'SAR', 'RES'), cam(8, 18, 'ARE', 'RES'), cam(18, 20, 'ARGS', 'RSA')],
       spt: sptLista({ 1: 4, 2: 5, 3: 6, 4: 7, 5: 9, 6: 12, 7: 16, 8: 20, 9: 25, 10: 30, 11: 35, 12: 38, 13: 42, 14: 45, 15: 48, 16: 50, 17: 50, 18: 50, 19: 50, 20: '30/5' }) }),
-    novoFuro({ nome: 'SP-04', x: 105, y: 345, cota: 840.0, na: 3.0, profTotal: 10, parada: 'projeto',
+    novoFuro({ nome: 'SP-04', x: EXEMPLO_E0 + 105, y: EXEMPLO_N0 + 345, cota: 840.0, na: 3.0, profTotal: 10, parada: 'projeto',
       camadas: [cam(0, 2, 'ARGS', 'ATR'), cam(2, 7, 'SAG', 'RES'), cam(7, 10, 'ARE', 'RES')],
       spt: sptLista({ 1: 3, 2: 4, 3: 6, 4: 8, 5: 10, 6: 13, 7: 18, 8: 24, 9: 32, 10: 40 }) }),
   ];

@@ -25,7 +25,7 @@ describe('arquivo de projeto', () => {
 
 describe('perfil do projeto de exemplo (regressão)', () => {
   const p = projetoExemplo();
-  const corte = { id: 'c', nome: "A–A'", p1: [30, 425], p2: [210, 425], lado: -1, faixa: 100 };
+  const corte = { id: 'c', nome: "A–A'", p1: [333030, 7394025], p2: [333210, 7394025], lado: -1, faixa: 100 };
   const bhs = perfilDoCorte(corte, p.furos);
 
   it('ordem e distâncias ao longo do corte', () => {
