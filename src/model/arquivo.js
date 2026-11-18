@@ -7,6 +7,8 @@ export function carregarProjeto(dados) {
   if (dados.version !== VERSAO) throw new Error(`Versão de arquivo não suportada: ${dados.version ?? 'desconhecida'}`);
   const p = novoProjeto(dados.projeto?.nome || 'Projeto');
   p.projeto = { ...p.projeto, ...(dados.projeto || {}) };
+  if (p.projeto.modoSPT !== 'golpes') p.projeto.modoSPT = 'metro';
+  p.cores = Object.fromEntries(Object.entries(dados.cores || {}).filter(([, v]) => /^#[0-9a-f]{6}$/i.test(String(v))));
   p.furos = (dados.furos || []).map((f) => novoFuro(f));
   p.cortes = (dados.cortes || []).map((c) => ({
     id: c.id || uid('c'),

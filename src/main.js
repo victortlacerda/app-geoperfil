@@ -1,6 +1,6 @@
 import './styles/main.css';
 import { criarStore, lerAutosave } from './store.js';
-import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num } from './model/projeto.js';
+import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num, camadasDoFuro } from './model/projeto.js';
 import { carregarProjeto, serializar } from './model/arquivo.js';
 import { furosNoCorte } from './geo/corte.js';
 import { criarPlanta } from './views/planta.js';
@@ -10,6 +10,7 @@ import { gerarDXF } from './io/dxf.js';
 import { lerCSV, interpretarTabela, aplicarImportacao, MODELO_CSV, MODELO_XLSX } from './io/csv.js';
 import { baixar, lerTexto, lerXLSX, escreverXLSX, nomeArquivo } from './io/arquivos.js';
 import { corFuro, OK, ACCENT } from './styles/tema.js';
+import { definirCoresProjeto } from './model/catalogo.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -25,7 +26,7 @@ if (salvo) {
 const store = criarStore(inicial || projetoExemplo(), { storage });
 
 const ui = {
-  view: 'planta', furoId: null, corteId: null, camadaSel: null, rp: 'spt',
+  view: 'planta', furoId: null, corteId: null, metroSel: null, rp: 'chart', linhasMin: {},
   graficoOculto: new Set(), tool: 'furo', faixa: 50,
   planta: { k: 2, cx: 0, cy: 0 },
   perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0 },
@@ -35,7 +36,7 @@ const app = {
   store, ui,
   furoAtual: () => store.doc.furos.find((f) => f.id === ui.furoId),
   corteAtivo: () => store.doc.cortes.find((c) => c.id === ui.corteId) || null,
-  selecionarFuro(id) { ui.furoId = id; ui.camadaSel = null; render(); },
+  selecionarFuro(id) { ui.furoId = id; ui.metroSel = null; render(); },
   selecionarCorte(id) { ui.corteId = id; ui.perfil.zoom = 1; ui.perfil.panX = 0; sincronizarFaixa(); render(); },
   render: () => render(),
   toast,
@@ -52,8 +53,6 @@ function validarSelecao() {
   const { furos, cortes } = store.doc;
   if (!furos.some((f) => f.id === ui.furoId)) ui.furoId = furos[0]?.id ?? null;
   if (ui.corteId && !cortes.some((c) => c.id === ui.corteId)) ui.corteId = cortes.at(-1)?.id ?? null;
-  const f = app.furoAtual();
-  if (!f || ui.camadaSel >= f.camadas.length) ui.camadaSel = null;
 }
 
 function renderSidebar() {
@@ -80,6 +79,7 @@ function renderSidebar() {
 }
 
 function render() {
+  definirCoresProjeto(store.doc.cores);
   validarSelecao();
   renderSidebar();
   if (document.activeElement !== $('faixaInput')) sincronizarFaixa();
@@ -193,7 +193,19 @@ const acoes = {
     toast(`Corte ${c.nome} removido. Ctrl+Z desfaz.`);
   },
   novoFuro() { abrirModalFuro(); },
-  addCamada() { camadas.addCamada(); },
+  modoSPT(m) { store.commit((d) => { d.projeto.modoSPT = m; }); },
+  maisMetro() { camadas.maisMetro(); },
+  restaurarCores() { camadas.restaurarCores(); },
+  async boletimPDF() {
+    const f = app.furoAtual();
+    if (!f) { toast('Selecione um furo.'); return; }
+    try {
+      const { gerarBoletimPDF } = await import('./io/boletim.js');
+      definirCoresProjeto(store.doc.cores);
+      const pdf = gerarBoletimPDF(store.doc, f);
+      baixar(pdf.output('blob'), nomeArquivo(`boletim_${f.nome}`, 'pdf'), 'application/pdf');
+    } catch (e) { toast('Erro ao gerar o boletim: ' + e.message); }
+  },
   rp(t) { ui.rp = t; camadas.render(); },
   ajustar() { planta.ajustar(); },
   axis(m) { ui.perfil.axis = m; $('btn-cota').classList.toggle('active', m === 'cota'); $('btn-prof').classList.toggle('active', m === 'prof'); perfil.draw(); },
@@ -283,4 +295,4 @@ requestAnimationFrame(() => {
 });
 
 // acesso para depuração e testes de ponta a ponta
-window.geoperfil = { store, ui, render, furosNoCorte };
+window.geoperfil = { store, ui, render, furosNoCorte, camadasDoFuro };

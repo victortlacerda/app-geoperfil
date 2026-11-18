@@ -2,6 +2,7 @@
 import { buildZones, cotasContato, niceStep } from '../geo/zonas.js';
 import { SEC } from '../model/catalogo.js';
 import { resolverFuro } from '../model/projeto.js';
+import { linhasHachura, hachuraZona } from './hachura.js';
 
 // DXF R12 é ASCII: sem quebras de linha, sem acentos e sem travessão.
 const limpa = (t) => String(t).replace(/[\r\n]+/g, ' ').replace(/[–—]/g, '-')
@@ -18,54 +19,14 @@ export const D = {
   },
 };
 
-/** Recorte de segmento a um retângulo (Cohen–Sutherland). */
-export function clipLR(x1, y1, x2, y2, xmn, ymn, xmx, ymx) {
-  const c = (p) => { let v = 0; if (p[0] < xmn) v |= 1; else if (p[0] > xmx) v |= 2; if (p[1] < ymn) v |= 4; else if (p[1] > ymx) v |= 8; return v; };
-  let a = [x1, y1], b = [x2, y2], ca = c(a), cb = c(b);
-  for (let i = 0; i < 8; i++) {
-    if (!(ca | cb)) return [a[0], a[1], b[0], b[1]];
-    if (ca & cb) return null;
-    const oc = ca || cb;
-    let x, y;
-    if (oc & 8) { x = a[0] + ((b[0] - a[0]) * (ymx - a[1])) / (b[1] - a[1]) || a[0]; y = ymx; }
-    else if (oc & 4) { x = a[0] + ((b[0] - a[0]) * (ymn - a[1])) / (b[1] - a[1]) || a[0]; y = ymn; }
-    else if (oc & 2) { y = a[1] + ((b[1] - a[1]) * (xmx - a[0])) / (b[0] - a[0]) || a[1]; x = xmx; }
-    else { y = a[1] + ((b[1] - a[1]) * (xmn - a[0])) / (b[0] - a[0]) || a[1]; x = xmn; }
-    if (oc === ca) { a = [x, y]; ca = c(a); } else { b = [x, y]; cb = c(b); }
-  }
-  return null;
-}
-
 function hatchLines(x0, y0, x1, y1, ly, angleDeg, spacing) {
-  let s = '';
-  const w = x1 - x0, h = y1 - y0, diag = Math.sqrt(w * w + h * h);
-  const rad = (angleDeg * Math.PI) / 180, cos = Math.cos(rad), sin = Math.sin(rad);
-  const steps = Math.ceil(diag / spacing) + 2;
-  for (let k = -steps; k <= steps; k++) {
-    const ox = k * spacing * cos, oy = k * spacing * sin;
-    const cl = clipLR(ox - sin * diag * 2 + x0, oy + cos * diag * 2 + y0, ox + sin * diag * 2 + x0, oy - cos * diag * 2 + y0, x0, y0, x1, y1);
-    if (cl) s += D.line(cl[0], cl[1], cl[2], cl[3], ly);
-  }
-  return s;
-}
-function hatchDots(x0, y0, x1, y1, ly, sp = 1.5) {
-  let s = '';
-  const r = sp * 0.08;
-  for (let x = x0 + sp / 2; x < x1; x += sp)
-    for (let y = y0 + sp / 2; y < y1; y += sp) { s += D.line(x - r, y, x + r, y, ly); s += D.line(x, y - r, x, y + r, ly); }
-  return s;
+  return linhasHachura(x0, y0, x1, y1, angleDeg, spacing).map(([a, b, c, d]) => D.line(a, b, c, d, ly)).join('');
 }
 function hatchZone(x0, y0, x1, y1, solo, sec, hl) {
-  let s = '';
-  if (solo.hatch === 'argila') s += hatchLines(x0, y0, x1, y1, hl, 0, 1.0);
-  else if (solo.hatch === 'silte') s += hatchLines(x0, y0, x1, y1, hl, 45, 1.0);
-  else if (solo.hatch === 'areia') s += hatchDots(x0, y0, x1, y1, hl, 1.2);
-  else if (solo.hatch === 'pedregulho') { s += hatchLines(x0, y0, x1, y1, hl, 0, 1.3); s += hatchLines(x0, y0, x1, y1, hl, 90, 1.3); }
-  if (sec === 'ATR') s += hatchLines(x0, y0, x1, y1, hl, 90, 1.8);
-  else if (sec === 'RES') s += hatchLines(x0, y0, x1, y1, hl, 135, 2.0);
-  else if (sec === 'RFR') { s += hatchLines(x0, y0, x1, y1, hl, 45, 1.2); s += hatchLines(x0, y0, x1, y1, hl, 135, 1.2); }
-  else if (sec === 'RSA') s += hatchLines(x0, y0, x1, y1, hl, 0, 0.4);
-  return s;
+  const { linhas, pontos } = hachuraZona(x0, y0, x1, y1, solo, sec);
+  const r = 1.2 * 0.08;
+  return linhas.map(([a, b, c, d]) => D.line(a, b, c, d, hl)).join('') +
+    pontos.map(([x, y]) => D.line(x - r, y, x + r, y, hl) + D.line(x, y - r, x, y + r, hl)).join('');
 }
 const soloLy = (solo, sec) => (solo.code + (sec ? '_' + sec : '')).replace(/[^A-Z0-9_]/gi, '').substring(0, 20);
 
@@ -174,11 +135,10 @@ export function gerarDXF(projeto, perfil, axis = 'cota') {
         const yT = b.cota - (m - 1), yB = b.cota - m;
         ent += D.poly([[rx - RW, yB], [rx + RW, yB], [rx + RW, yT], [rx - RW, yT]], 'SPT', true);
         if (m % 2 === 1) ent += hatchLines(rx - RW, yB, rx + RW, yT, 'SPT_HATCH', 90, 0.12);
-        const n = b.spt[m];
-        if (n !== undefined) ent += D.text(n >= 50 ? 'IMP' : String(n), rx + RW + 0.3, (yT + yB) / 2 - 0.15, 0.5, n >= 50 ? 'IMP' : 'SPT_TEXTO');
+        const t = b.sptTexto[m];
+        if (t !== undefined) ent += D.text(t, rx + RW + 0.3, (yT + yB) / 2 - 0.15, 0.5, b.spt[m] >= 50 ? 'IMP' : 'SPT_TEXTO');
       }
-      const lastM = Math.ceil(td);
-      if (b.spt[lastM] >= 50 || b.spt[lastM - 1] >= 50) {
+      if (b.imp) {
         const yBase = b.cota - td;
         for (let k = 0; k < 3; k++) ent += D.line(rx - 0.8, yBase - 0.5 - k * 0.5, rx + 0.8, yBase - 0.5 - k * 0.5, 'IMP');
         ent += D.text('IMP', rx + 1, yBase - 0.8, 0.7, 'IMP');

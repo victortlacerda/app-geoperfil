@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { lerCSV, detectarSeparador, interpretarTabela, aplicarImportacao, normalizarCabecalho, MODELO_CSV, MODELO_XLSX } from '../src/io/csv.js';
-import { novoProjeto, novoFuro, sptPorMetro } from '../src/model/projeto.js';
+import { novoProjeto, novoFuro, sptPorMetro, camadasDoFuro } from '../src/model/projeto.js';
 
 describe('leitura de CSV', () => {
   it('detecta o separador', () => {
@@ -38,7 +38,7 @@ describe('aplicação da importação', () => {
     expect(r.furosNovos).toBe(2);
     const sp1 = p.furos.find((f) => f.nome === 'SP-01');
     expect([sp1.x, sp1.y, sp1.cota, sp1.na]).toEqual([333120.45, 7394210.8, 842.5, 3.2]);
-    expect(sp1.camadas.map((c) => c.codigo)).toEqual(['ARGS', 'ARGA', 'AREA']);
+    expect(camadasDoFuro(sp1).map((c) => [c.de, c.ate, c.codigo, c.origem])).toEqual([[0, 2, 'ARGS', 'ATR'], [2, 6, 'ARGA', 'RES'], [6, 9, 'AREA', 'RES']]);
     expect(sptPorMetro(sp1)).toEqual({ 1: 3, 2: 4, 3: 5, 4: 6 });
     expect(r.avisos).toEqual([]);
   });
@@ -46,7 +46,7 @@ describe('aplicação da importação', () => {
   it('N-SPT sem profundidade é ignorado com aviso', () => {
     const p = novoProjeto();
     const r = aplicarImportacao(p, [{ furo: 'SP-01', x: '0', y: '0', de: '2', ate: '5.5', nspt: '5' }]);
-    expect(p.furos[0].spt).toEqual([]);
+    expect(sptPorMetro(p.furos[0])).toEqual({});
     expect(r.avisos.join(' ')).toMatch(/prof/);
   });
 
@@ -55,7 +55,7 @@ describe('aplicação da importação', () => {
     p.furos.push(novoFuro({ nome: 'SP-01', x: 10, y: 20, camadas: [{ de: 0, ate: 2, codigo: 'ARE' }] }));
     const r = aplicarImportacao(p, [{ furo: 'SP-01', de: '0', ate: '2', primario: 'ARGS' }, { furo: 'SP-01', de: '2', ate: '4', primario: 'SAR' }]);
     expect(r.furosAtualizados).toBe(1);
-    expect(p.furos[0].camadas.map((c) => c.codigo)).toEqual(['ARGS', 'SAR']);
+    expect(camadasDoFuro(p.furos[0]).map((c) => c.codigo)).toEqual(['ARGS', 'SAR']);
     expect([p.furos[0].x, p.furos[0].y]).toEqual([10, 20]);
   });
 
@@ -73,7 +73,7 @@ describe('aplicação da importação', () => {
     aplicarImportacao(p, regs);
     const sp1 = p.furos.find((f) => f.nome === 'SP-01');
     expect(sp1.profTotal).toBe(15);
-    expect(sp1.camadas).toHaveLength(2);
+    expect(camadasDoFuro(sp1)).toHaveLength(2);
     expect(sptPorMetro(sp1)).toEqual({ 1: 3, 2: 4 });
   });
 });

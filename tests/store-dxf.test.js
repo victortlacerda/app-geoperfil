@@ -22,8 +22,8 @@ describe('store', () => {
   it('não altera versões anteriores do projeto (imutável por cópia)', () => {
     const s = criarStore(projetoExemplo());
     const antes = s.doc;
-    s.commit((d) => { d.furos[0].camadas[0].codigo = 'ARE'; });
-    expect(antes.furos[0].camadas[0].codigo).toBe('ARGS');
+    s.commit((d) => { d.furos[0].metros[0].codigo = 'ARE'; });
+    expect(antes.furos[0].metros[0].codigo).toBe('ARGS');
   });
 
   it('agrupa alterações seguidas com a mesma chave em um passo', () => {

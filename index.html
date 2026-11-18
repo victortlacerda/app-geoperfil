@@ -11,7 +11,7 @@
   <div class="logo">Geo<span>Perfil</span></div>
   <div class="vsep"></div>
   <button class="nav-tab active" id="nav-planta" data-action="view" data-arg="planta">Planta</button>
-  <button class="nav-tab" id="nav-camadas" data-action="view" data-arg="camadas">Camadas</button>
+  <button class="nav-tab" id="nav-camadas" data-action="view" data-arg="camadas">Boletim</button>
   <button class="nav-tab" id="nav-perfil" data-action="view" data-arg="perfil">Perfil 2D</button>
   <div class="vsep"></div>
   <button class="t-btn icon" id="btn-undo" data-action="desfazer" title="Desfazer (Ctrl+Z)">↶</button>
@@ -70,11 +70,22 @@
       </div>
     </section>
 
-    <!-- CAMADAS -->
+    <!-- CAMADAS (boletim metro a metro) -->
     <section id="view-camadas" class="view" hidden>
       <div class="toolbar">
-        <span class="tlbl strong" id="tableTitle">Camadas</span>
-        <div class="push"><button class="t-btn active" data-action="addCamada">+ Camada</button></div>
+        <span class="tlbl strong" id="tableTitle">Boletim</span>
+        <div class="tsep"></div>
+        <span class="tlbl">Lançamento do SPT:</span>
+        <button class="t-btn active" id="btn-modo-metro" data-action="modoSPT" data-arg="metro">Metro a metro</button>
+        <button class="t-btn" id="btn-modo-golpes" data-action="modoSPT" data-arg="golpes">Golpes por 15 cm</button>
+        <div class="push"><button class="t-btn" data-action="boletimPDF">Boletim em PDF</button></div>
+      </div>
+      <div class="furo-head" id="furoHead">
+        <label>Prof. limite <input type="number" step="0.01" min="0" data-field="profTotal" id="headProf" placeholder="ex: 15,45" /> m</label>
+        <label>Critério de parada <select data-field="parada" id="headParada"></select></label>
+        <label>NA <input type="number" step="0.01" data-field="na" id="headNA" /> m</label>
+        <label>Cota da boca <input type="number" step="0.01" data-field="cota" id="headCota" /> m</label>
+        <span class="head-resumo" id="headResumo"></span>
       </div>
       <div class="camadas-body">
         <div class="col-panel">
@@ -82,47 +93,42 @@
           <div class="col-wrap" id="colWrap"><canvas id="colCanvas"></canvas></div>
         </div>
         <div class="table-panel">
-          <div class="table-wrap">
-            <table class="layer-table">
-              <thead><tr>
-                <th class="sw-cell"></th><th>De (m)</th><th>Até (m)</th>
-                <th class="w130">Classif. primária</th>
-                <th class="w120">Classif. secundária</th>
-                <th>Cor</th><th class="del-cell"></th>
-              </tr></thead>
-              <tbody id="layerBody"></tbody>
+          <div class="table-wrap" id="gridWrap">
+            <table class="grid-table" id="grid">
+              <thead id="gridHead"></thead>
+              <tbody id="gridBody"></tbody>
             </table>
-            <div class="empty" id="layerEmpty" hidden>Nenhuma camada. Use "+ Camada".</div>
           </div>
-          <button class="add-lbtn" data-action="addCamada">+ Adicionar camada</button>
+          <div class="grid-foot">
+            <button class="t-btn" data-action="maisMetro">+ 1 metro</button>
+            <span class="hint">Enter ou Tab: próximo metro · deixe vazio para repetir a classificação de cima · arraste o ▪ para copiar · cole colunas do Excel</span>
+          </div>
         </div>
         <div class="right-panel">
           <div class="rp-tabs">
-            <div class="rp-tab active" id="rt-spt" data-action="rp" data-arg="spt">N-SPT</div>
-            <div class="rp-tab" id="rt-chart" data-action="rp" data-arg="chart">Gráfico</div>
+            <div class="rp-tab active" id="rt-chart" data-action="rp" data-arg="chart">Gráfico</div>
+            <div class="rp-tab" id="rt-camadas" data-action="rp" data-arg="camadas">Camadas</div>
             <div class="rp-tab" id="rt-info" data-action="rp" data-arg="info">Dados</div>
           </div>
-          <div class="rp-body" id="rpSpt">
-            <div class="rp-sec">
-              <div class="rp-ttl">Nível d'água (NA)</div>
-              <div class="rp-row"><label for="naInput">Profundidade</label><input type="number" step="0.1" id="naInput" data-field="na" /><span class="unit">m</span></div>
-            </div>
-            <div class="rp-sec">
-              <div class="rp-ttl">N-SPT por metro</div>
-              <div id="sptRows"></div>
-            </div>
-          </div>
-          <div class="chart-outer" id="rpChart" hidden>
+          <div class="chart-outer" id="rpChart">
             <div class="chart-checks" id="chartChecks"></div>
             <div class="chart-cw" id="chartWrap"><canvas id="sptChart"></canvas></div>
+          </div>
+          <div class="rp-body" id="rpCamadas" hidden>
+            <div class="rp-sec">
+              <div class="rp-ttl">Camadas do furo</div>
+              <div id="listaCamadas"></div>
+            </div>
+            <div class="rp-sec">
+              <div class="rp-ttl">Cores das classificações</div>
+              <div id="listaCores"></div>
+              <button class="sb-add" data-action="restaurarCores">Restaurar cores padrão</button>
+            </div>
           </div>
           <div class="rp-body" id="rpInfo" hidden>
             <div class="rp-sec">
               <div class="rp-ttl">Identificação</div>
               <div class="rp-row"><label>ID</label><input type="text" data-field="nome" id="infoNome" /></div>
-              <div class="rp-row"><label>Cota da boca</label><input type="number" step="0.01" data-field="cota" id="infoCota" /><span class="unit">m</span></div>
-              <div class="rp-row"><label>Prof. total</label><input type="number" step="0.01" data-field="profTotal" id="infoProf" /><span class="unit">m</span></div>
-              <div class="rp-row"><label>NA</label><input type="number" step="0.01" data-field="na" id="infoNA" /><span class="unit">m</span></div>
             </div>
             <div class="rp-sec">
               <div class="rp-ttl">Localização</div>
@@ -132,6 +138,8 @@
           </div>
         </div>
       </div>
+      <datalist id="dl-solos"></datalist>
+      <datalist id="dl-sec"></datalist>
     </section>
 
     <!-- PERFIL -->

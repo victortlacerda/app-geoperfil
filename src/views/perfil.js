@@ -57,21 +57,18 @@ export function criarPerfil(app) {
       if (h <= 0) continue;
       ctx.fillStyle = m % 2 ? '#1a1a1a' : '#fff'; ctx.fillRect(cx - RULER_W, yT, RULER_W * 2, h);
       ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.5; ctx.strokeRect(cx - RULER_W, yT, RULER_W * 2, h);
-      const n = b.spt[m];
-      if (n !== undefined && h > 7) {
+      const n = b.spt[m], t = b.sptTexto[m];
+      if (t !== undefined && h > 7) {
         ctx.save(); ctx.fillStyle = n >= 50 ? PERIGO : '#111'; ctx.font = h > 10 ? '500 9px sans-serif' : '8px sans-serif';
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.fillText(n >= 50 ? 'Imp.' : String(n), cx + RULER_W + SPT_TXT, yT + h / 2); ctx.restore();
+        ctx.fillText(t, cx + RULER_W + SPT_TXT, yT + h / 2); ctx.restore();
       }
     }
   }
 
   function drawImpSymbol(ctx, b) {
-    const depth = depthOf(b); if (!depth) return;
-    const lastM = Math.ceil(depth);
-    let imp = false;
-    for (let m = lastM; m >= Math.max(1, lastM - 2); m--) if (b.spt[m] >= 50) { imp = true; break; }
-    if (!imp) return;
+    const depth = depthOf(b);
+    if (!depth || !b.imp) return;
     const cx = pwx(b.dist), yBase = pwy(b.cota - depth);
     ctx.save(); ctx.strokeStyle = PERIGO; ctx.lineWidth = 2; ctx.lineCap = 'round';
     for (let i = 0; i < 3; i++) { const y2 = yBase + 5 + i * 6; ctx.beginPath(); ctx.moveTo(cx - 10, y2); ctx.lineTo(cx + 10, y2); ctx.stroke(); }
