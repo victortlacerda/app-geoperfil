@@ -1,4 +1,4 @@
-// Catálogo de solos e classificações secundárias.
+// Catálogo de solos, classificações secundárias e critérios de parada.
 
 export const SOLOS = [
   { code: 'ARGS', label: 'ARGS — Argila siltosa', fill: '#FAEEDA', hatch: 'argila', hex: '#BA7517' },
@@ -19,14 +19,59 @@ export const SEC = [
   { value: 'RSA', label: 'Rocha sã' },
 ];
 
+export const PARADAS = [
+  { value: '', label: '—' },
+  { value: 'imp_percussao', label: 'Impenetrável à percussão' },
+  { value: 'imp_trado', label: 'Impenetrável ao trado' },
+  { value: 'projeto', label: 'Profundidade de projeto' },
+];
+export const paradaLabel = (v) => PARADAS.find((p) => p.value === v)?.label || '';
+export const ehImpenetravel = (v) => String(v || '').startsWith('imp_');
+
 export const SOLO_PADRAO = 'AREA';
+
+// Cores do projeto: cada classificação tem uma cor só, que o usuário pode trocar.
+let coresProjeto = {};
+export const definirCoresProjeto = (cores) => { coresProjeto = cores || {}; };
+export const corPadrao = (code) => soloPorCodigo(code)?.fill || '#dddddd';
 
 export const soloPorCodigo = (code) =>
   SOLOS.find((s) => s.code === String(code || '').trim().toUpperCase()) || null;
 
-export const solo = (code) => soloPorCodigo(code) || soloPorCodigo(SOLO_PADRAO);
+/** Solo do catálogo com a cor do projeto aplicada. Código desconhecido cai no padrão. */
+export function solo(code) {
+  const s = soloPorCodigo(code) || soloPorCodigo(SOLO_PADRAO);
+  return coresProjeto[s.code] ? { ...s, fill: coresProjeto[s.code] } : s;
+}
 
 export const secPorValor = (v) =>
   SEC.find((s) => s.value === String(v || '').trim().toUpperCase())?.value ?? '';
 
 export const secLabel = (v) => SEC.find((s) => s.value === v)?.label || '';
+
+const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+/**
+ * Interpreta o que o usuário digitou na classificação primária.
+ * Aceita o código (AREA) ou o começo do nome (areia arg). '' = vazio; null = não reconhecido.
+ */
+export function resolverCodigo(texto) {
+  const t = norm(texto);
+  if (!t) return '';
+  const porCodigo = SOLOS.find((s) => s.code.toLowerCase() === t);
+  if (porCodigo) return porCodigo.code;
+  const porNome = SOLOS.filter((s) => norm(s.label.split('—')[1]).startsWith(t) || norm(s.label).startsWith(t));
+  return porNome.length === 1 ? porNome[0].code : null;
+}
+
+/** Classificação secundária: código, nome ou "-" (nenhuma). '' = herdar; null = não reconhecido. */
+export function resolverOrigem(texto) {
+  const t = norm(texto);
+  if (!t) return '';
+  if (t === '-' || t === '—' || t === 'nenhuma' || t === 'nenhum') return '-';
+  const opcoes = SEC.filter((o) => o.value);
+  const exato = opcoes.find((o) => o.value.toLowerCase() === t || norm(o.label) === t);
+  if (exato) return exato.value;
+  const parcial = opcoes.filter((o) => norm(o.label).includes(t));
+  return parcial.length === 1 ? parcial[0].value : null;
+}

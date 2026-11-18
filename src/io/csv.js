@@ -1,7 +1,7 @@
 // Importação de sondagens a partir de CSV ou de planilhas (linhas já lidas).
 // As colunas são reconhecidas pelo cabeçalho; a coluna "furo" é obrigatória.
-import { novoFuro, novaCamada, setSpt, num } from '../model/projeto.js';
-import { soloPorCodigo, secPorValor, SOLO_PADRAO } from '../model/catalogo.js';
+import { novoFuro, setCampoMetro, aplicarCamadas, camadasDoFuro, textoSPTValido, num } from '../model/projeto.js';
+import { soloPorCodigo, secPorValor } from '../model/catalogo.js';
 
 const ALIASES = {
   furo: ['furo', 'sondagem', 'id', 'nome', 'sp', 'furo_id'],
@@ -14,6 +14,7 @@ const ALIASES = {
   ate: ['ate', 'base', 'prof_ate', 'ate_m'],
   primario: ['primario', 'solo', 'codigo', 'classif_primaria', 'classificacao', 'classificacao_primaria'],
   secundario: ['secundario', 'origem', 'classif_secundaria', 'classificacao_secundaria'],
+  desc: ['descricao', 'desc', 'descricao_tatil_visual', 'observacao'],
   prof: ['prof', 'profundidade', 'metro', 'cota_spt', 'prof_m'],
   nspt: ['nspt', 'n_spt', 'spt', 'n_golpes'],
 };
@@ -77,10 +78,12 @@ export function interpretarTabela(linhas) {
  */
 export function aplicarImportacao(projeto, registros) {
   const res = { furosNovos: 0, furosAtualizados: new Set(), camadas: 0, spt: 0, avisos: [] };
-  const codigosDesconhecidos = new Set(), semCoord = new Set(), ignoradas = [], semProf = [];
+  const codigosDesconhecidos = new Set(), semCoord = new Set(), ignoradas = [], semProf = [], sptInvalido = [];
   const furoPorNome = new Map(projeto.furos.map((f) => [f.nome, f]));
   const coordInformada = new Set();
   const existentes = new Set(projeto.furos.map((f) => f.nome));
+
+  const camadasNovas = new Map(); // furo → camadas importadas
 
   registros.forEach((r, idx) => {
     const nome = r.furo;
@@ -95,23 +98,28 @@ export function aplicarImportacao(projeto, registros) {
     }
 
     const de = num(r.de, NaN), ate = num(r.ate, NaN);
-    const temCamada = Number.isFinite(de) && Number.isFinite(ate);
     if (r.de !== undefined || r.ate !== undefined) {
-      if (!temCamada || ate <= de) ignoradas.push(idx + 1);
-    }
-    if (temCamada && ate > de) {
-      if (r.primario && !soloPorCodigo(r.primario)) codigosDesconhecidos.add(r.primario);
-      const cam = novaCamada({ de, ate, codigo: r.primario || SOLO_PADRAO, origem: secPorValor(r.secundario) });
-      const i = f.camadas.findIndex((c) => Math.abs(c.de - de) < 0.01 && Math.abs(c.ate - ate) < 0.01);
-      if (i >= 0) f.camadas[i] = cam; else f.camadas.push(cam);
-      f.camadas.sort((a, b) => a.de - b.de);
-      res.camadas++;
+      if (!Number.isFinite(de) || !Number.isFinite(ate) || ate <= de) ignoradas.push(idx + 1);
+      else if (r.primario && !soloPorCodigo(r.primario)) codigosDesconhecidos.add(r.primario);
+      else if (r.primario) {
+        if (!camadasNovas.has(f)) camadasNovas.set(f, []);
+        camadasNovas.get(f).push({ de, ate, codigo: soloPorCodigo(r.primario).code, origem: secPorValor(r.secundario), descricao: r.desc || '' });
+        res.camadas++;
+      }
     }
 
-    const n = num(r.nspt, NaN);
-    const prof = num(r.prof, NaN);
-    if (Number.isFinite(n) && Number.isFinite(prof)) { setSpt(f, Math.round(prof), n); res.spt++; }
-    else if (Number.isFinite(n)) semProf.push(idx + 1);
+    if (r.nspt !== undefined) {
+      const prof = num(r.prof, NaN);
+      if (!Number.isFinite(prof)) semProf.push(idx + 1);
+      else if (!textoSPTValido(r.nspt)) sptInvalido.push(idx + 1);
+      else { setCampoMetro(f, Math.max(1, Math.round(prof)), 'spt', r.nspt.replace(/\s+/g, '')); res.spt++; }
+    }
+  });
+
+  // as camadas importadas substituem a classificação dos metros que cobrem
+  camadasNovas.forEach((novas, f) => {
+    const sobrepoe = (c) => novas.some((n) => c.de < n.ate && n.de < c.ate);
+    aplicarCamadas(f, [...novas, ...camadasDoFuro(f).filter((c) => !sobrepoe(c))].sort((a, b) => a.de - b.de));
   });
 
   // furos novos sem coordenadas: espalha em linha ao lado dos existentes
@@ -123,7 +131,8 @@ export function aplicarImportacao(projeto, registros) {
     semXY.forEach((f, i) => { f.x = x0 + i * 40; f.y = y0; });
     res.avisos.push(`Sem coordenadas (posicionados em linha, ajuste depois): ${semXY.map((f) => f.nome).join(', ')}.`);
   }
-  if (codigosDesconhecidos.size) res.avisos.push(`Códigos de solo desconhecidos, trocados por ${SOLO_PADRAO}: ${[...codigosDesconhecidos].join(', ')}.`);
+  if (codigosDesconhecidos.size) res.avisos.push(`Camadas com classificação desconhecida foram ignoradas: ${[...codigosDesconhecidos].join(', ')}.`);
+  if (sptInvalido.length) res.avisos.push(`N-SPT inválido ignorado nas linhas: ${sptInvalido.slice(0, 10).join(', ')}.`);
   if (semProf.length) res.avisos.push(`N-SPT sem a coluna "prof" ignorado nas linhas: ${semProf.slice(0, 10).join(', ')}${semProf.length > 10 ? '…' : ''}.`);
   if (ignoradas.length) res.avisos.push(`Camadas ignoradas (de/até inválidos) nas linhas: ${ignoradas.slice(0, 10).join(', ')}${ignoradas.length > 10 ? '…' : ''}.`);
   res.furosAtualizados = res.furosAtualizados.size;
@@ -133,8 +142,8 @@ export function aplicarImportacao(projeto, registros) {
 export const MODELO_CSV = [
   'furo;x;y;cota;na;de;ate;primario;secundario;prof;nspt',
   'SP-01;333120.45;7394210.80;842.50;3.20;0;2;ARGS;ATR;1;3',
-  'SP-01;;;;;2;5.5;ARGA;RES;2;4',
-  'SP-01;;;;;5.5;9;AREA;RES;3;5',
+  'SP-01;;;;;2;6;ARGA;RES;2;4',
+  'SP-01;;;;;6;9;AREA;RES;3;5',
   'SP-01;;;;;;;;;4;6',
   'SP-02;333195.10;7394218.30;839.00;2.80;0;1.5;ARGS;ATR;1;2',
   'SP-02;;;;;1.5;6;ARGA;RES;2;3',
@@ -142,6 +151,6 @@ export const MODELO_CSV = [
 
 export const MODELO_XLSX = {
   furos: [['furo', 'x', 'y', 'cota', 'na', 'prof_total'], ['SP-01', 333120.45, 7394210.8, 842.5, 3.2, 15], ['SP-02', 333195.1, 7394218.3, 839, 2.8, 12]],
-  camadas: [['furo', 'de', 'ate', 'primario', 'secundario'], ['SP-01', 0, 2, 'ARGS', 'ATR'], ['SP-01', 2, 5.5, 'ARGA', 'RES'], ['SP-02', 0, 1.5, 'ARGS', 'ATR']],
+  camadas: [['furo', 'de', 'ate', 'primario', 'secundario'], ['SP-01', 0, 2, 'ARGS', 'ATR'], ['SP-01', 2, 6, 'ARGA', 'RES'], ['SP-02', 0, 1.5, 'ARGS', 'ATR']],
   spt: [['furo', 'prof', 'nspt'], ['SP-01', 1, 3], ['SP-01', 2, 4], ['SP-02', 1, 2]],
 };

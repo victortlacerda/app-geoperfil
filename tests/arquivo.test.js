@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { carregarProjeto, serializar } from '../src/model/arquivo.js';
-import { projetoExemplo } from '../src/model/projeto.js';
+import { projetoExemplo, camadasDoFuro } from '../src/model/projeto.js';
 import { perfilDoCorte } from '../src/geo/corte.js';
 import { buildZones } from '../src/geo/zonas.js';
 
@@ -13,7 +13,7 @@ describe('arquivo de projeto', () => {
 
   it('completa campos ausentes com valores padrão', () => {
     const p = carregarProjeto({ version: 2, furos: [{ nome: 'SP-01', camadas: [{ de: 0, ate: 1, codigo: 'XYZ' }] }], cortes: [{ p1: [0, 0], p2: [10, 0] }] });
-    expect(p.furos[0].camadas[0].codigo).toBe('AREA');
+    expect(camadasDoFuro(p.furos[0])).toEqual([]); // classificação desconhecida não vira camada
     expect(p.cortes[0]).toMatchObject({ lado: 1, faixa: null });
   });
 
@@ -37,9 +37,9 @@ describe('perfil do projeto de exemplo (regressão)', () => {
     expect(z).toEqual([
       [845.2, 842.2, null, 'SAG'],
       [842.2, 839, null, 'SAR'],
-      [839, 837.5, 'ARGS', 'SAR'],
-      [837.5, 837.2, 'ARGA', 'SAR'],
-      [837.2, 833, 'ARGA', 'ARE'],
+      [839, 837.2, 'ARGS', 'SAR'],
+      [837.2, 837, 'ARGS', 'ARE'],
+      [837, 833, 'ARGA', 'ARE'],
       [833, 827.2, 'ARS', 'ARE'],
       [827.2, 827, 'ARS', 'ARGS'],
       [827, 825.2, null, 'ARGS'],
