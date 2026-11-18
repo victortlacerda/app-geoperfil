@@ -38,7 +38,7 @@ export function novoProjeto(nome = 'Novo projeto') {
 const cam = (de, ate, codigo, origem) => ({ de, ate, codigo, origem });
 const sptLista = (obj) => Object.entries(obj).map(([p, n]) => ({ prof: +p, n }));
 
-/** Projeto de exemplo (os mesmos 4 furos da versão 1, convertidos para metros). */
+/** Projeto de exemplo com 4 furos. */
 export function projetoExemplo() {
   const p = novoProjeto('Exemplo');
   p.furos = [

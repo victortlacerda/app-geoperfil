@@ -1,5 +1,5 @@
-// Perfil 2D ao longo do corte ativo. Mesma lógica de zonas da versão 1
-// (troca de material no meio do vão); a Fase 4 traz contatos interpolados.
+// Perfil 2D ao longo do corte ativo. A troca de material acontece no meio do vão;
+// a Fase 4 traz contatos interpolados.
 import { buildZones, cotasContato, niceStep, extensaoCotas } from '../geo/zonas.js';
 import { perfilDoCorte } from '../geo/corte.js';
 import { secLabel } from '../model/catalogo.js';

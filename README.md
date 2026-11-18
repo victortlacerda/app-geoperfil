@@ -2,7 +2,7 @@
 
 App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento de furos em planta, camadas e N-SPT por furo, cortes com faixa de inclusão, perfil 2D com hachuras e exportação DXF/PDF.
 
-> Versão 2 em desenvolvimento. A versão original (arquivo único) está em [`legacy/index.html`](legacy/index.html).
+> Versão 2 em desenvolvimento: reestruturação completa do app.
 
 ## Funcionalidades
 
@@ -11,9 +11,8 @@ App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento d
 - **Camadas** por furo com classificação primária e secundária, coluna estratigráfica, N-SPT por metro (Enter avança para o próximo metro) e gráfico N-SPT × profundidade.
 - **Perfil 2D** com hachuras, régua de SPT, NA, impenetrável, eixo em cota ou profundidade e zoom.
 - **Exportação**: DXF R12 (planta + perfil, layers por solo), PDF pela impressão do navegador e projeto em JSON.
-- **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, cota, na, prof_total, de, ate, primario, secundario, prof, nspt`), inclusive planilhas com abas separadas. O formato antigo de 6 colunas continua aceito.
+- **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, cota, na, prof_total, de, ate, primario, secundario, prof, nspt`), inclusive planilhas com abas separadas.
 - **Desfazer/refazer** (Ctrl+Z / Ctrl+Y) e salvamento automático no navegador.
-- Projetos salvos na versão 1 abrem normalmente e são convertidos para o formato 2.
 
 ## Desenvolvimento
 
@@ -32,13 +31,12 @@ A cada push na `main`, o GitHub Actions roda os testes e publica `dist/` no GitH
 src/
   main.js          ligação entre estado, vistas e ações
   store.js         estado do projeto, desfazer/refazer, salvamento automático
-  model/           catálogo de solos, modelo de dados v2, migração v1 → v2
+  model/           catálogo de solos, modelo de dados e arquivo de projeto
   geo/             geometria do corte e zonas do perfil
   views/           planta, camadas, perfil e hachuras (canvas)
   io/              CSV/XLSX, DXF, arquivos
   styles/
-tests/             testes unitários (inclui comparação com o cálculo da v1)
-legacy/            versão 1, só para referência
+tests/             testes unitários
 ```
 
 ## Formato do projeto (v2)
@@ -55,8 +53,6 @@ Tudo em metros. `x` = Leste, `y` = Norte.
   "cortes": [{ "id": "…", "nome": "A–A'", "p1": [20, 395], "p2": [230, 395], "lado": -1, "faixa": 40 }]
 }
 ```
-
-Na conversão da v1, coordenadas de tela viram metros locais (`x = px × 0,5`, `y = 500 − py × 0,5`).
 
 ## Roadmap
 

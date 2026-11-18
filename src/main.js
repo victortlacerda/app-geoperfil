@@ -1,7 +1,7 @@
 import './styles/main.css';
 import { criarStore, lerAutosave } from './store.js';
 import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num } from './model/projeto.js';
-import { carregarProjeto, serializar } from './model/migracao.js';
+import { carregarProjeto, serializar } from './model/arquivo.js';
 import { furosNoCorte } from './geo/corte.js';
 import { criarPlanta } from './views/planta.js';
 import { criarCamadas } from './views/camadas.js';
@@ -20,7 +20,7 @@ const avisosIniciais = [];
 let inicial = null;
 const salvo = lerAutosave(storage);
 if (salvo) {
-  try { inicial = carregarProjeto(salvo).projeto; } catch { avisosIniciais.push('O projeto salvo automaticamente não pôde ser lido; abrindo o exemplo.'); }
+  try { inicial = carregarProjeto(salvo); } catch { avisosIniciais.push('O projeto salvo automaticamente não pôde ser lido; abrindo o exemplo.'); }
 }
 const store = criarStore(inicial || projetoExemplo(), { storage });
 
@@ -152,8 +152,8 @@ async function carregarArquivoImportacao(file) {
 function mostrarPreviaImportacao() {
   const el = $('csvPreview');
   const partes = importacao.tabelas.map(({ aba, linhas }) => {
-    const { registros, colunas, legado } = interpretarTabela(linhas);
-    return `${aba ? `[${aba}] ` : ''}${registros.length} linha(s) · colunas: ${colunas.join(', ')}${legado ? ' (formato antigo)' : ''}\n` +
+    const { registros, colunas } = interpretarTabela(linhas);
+    return `${aba ? `[${aba}] ` : ''}${registros.length} linha(s) · colunas: ${colunas.join(', ') || 'nenhuma reconhecida (falta a coluna "furo")'}\n` +
       linhas.slice(0, 6).map((l) => l.join(' | ')).join('\n');
   });
   el.textContent = `${importacao.nome}\n\n` + partes.join('\n\n');
@@ -242,11 +242,11 @@ $('fileOpen').addEventListener('change', async (e) => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
   try {
-    const { projeto, avisos } = carregarProjeto(JSON.parse(await lerTexto(file)));
+    const projeto = carregarProjeto(JSON.parse(await lerTexto(file)));
     store.substituir(projeto);
     ui.corteId = projeto.cortes.at(-1)?.id ?? null; ui.furoId = null;
     sincronizarFaixa(); planta.ajustar(); render();
-    toast([`Carregado: ${projeto.furos.length} furos, ${projeto.cortes.length} cortes.`, ...avisos].join(' '), avisos.length ? 9000 : 3500);
+    toast(`Carregado: ${projeto.furos.length} furos, ${projeto.cortes.length} cortes.`);
   } catch (err) { toast('Erro ao abrir: ' + err.message); }
 });
 

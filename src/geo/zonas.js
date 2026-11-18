@@ -1,5 +1,5 @@
-// Zonas entre dois furos vizinhos do perfil (mesma lógica da versão 1:
-// a troca de material acontece no meio do vão). Fase 4 troca por contatos interpolados.
+// Zonas entre dois furos vizinhos do perfil: a troca de material acontece
+// no meio do vão. A Fase 4 troca por contatos interpolados.
 
 export function niceStep(r) {
   if (!(r > 0) || !Number.isFinite(r)) return 1;

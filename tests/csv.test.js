@@ -21,17 +21,12 @@ describe('leitura de CSV', () => {
 
 describe('interpretação de tabelas', () => {
   it('lê pelo cabeçalho, em qualquer ordem e com nomes alternativos', () => {
-    const { registros, legado } = interpretarTabela([['Sondagem', 'Topo', 'Base', 'Solo', 'Leste', 'Norte'], ['SP-9', '0', '2,5', 'ARE', '100', '200']]);
-    expect(legado).toBe(false);
+    const { registros } = interpretarTabela([['Sondagem', 'Topo', 'Base', 'Solo', 'Leste', 'Norte'], ['SP-9', '0', '2,5', 'ARE', '100', '200']]);
     expect(registros).toEqual([{ furo: 'SP-9', de: '0', ate: '2,5', primario: 'ARE', x: '100', y: '200' }]);
   });
 
-  it('aceita o formato antigo de 6 colunas, com ou sem cabeçalho', () => {
-    const sem = interpretarTabela([['SP-01', '0', '2', 'ARGS', 'ATR', '3']]);
-    expect(sem.legado).toBe(true);
-    expect(sem.registros[0]).toMatchObject({ furo: 'SP-01', de: '0', ate: '2', primario: 'ARGS', secundario: 'ATR', nspt: '3' });
-    const com = interpretarTabela([['furo', 'de', 'ate', 'primario', 'secundario', 'nspt'], ['SP-01', '0', '2', 'ARGS', 'ATR', '3']]);
-    expect(com.registros).toHaveLength(1);
+  it('sem a coluna "furo" não importa nada', () => {
+    expect(interpretarTabela([['SP-01', '0', '2', 'ARGS', 'ATR', '3']]).registros).toEqual([]);
   });
 });
 
@@ -48,10 +43,11 @@ describe('aplicação da importação', () => {
     expect(r.avisos).toEqual([]);
   });
 
-  it('formato antigo: N-SPT vai para o metro do meio da camada', () => {
+  it('N-SPT sem profundidade é ignorado com aviso', () => {
     const p = novoProjeto();
-    aplicarImportacao(p, interpretarTabela([['SP-01', '2', '5.5', 'ARGA', 'RES', '5']]).registros);
-    expect(sptPorMetro(p.furos[0])).toEqual({ 4: 5 });
+    const r = aplicarImportacao(p, [{ furo: 'SP-01', x: '0', y: '0', de: '2', ate: '5.5', nspt: '5' }]);
+    expect(p.furos[0].spt).toEqual([]);
+    expect(r.avisos.join(' ')).toMatch(/prof/);
   });
 
   it('atualiza furos existentes sem duplicar camadas', () => {

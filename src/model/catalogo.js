@@ -1,5 +1,4 @@
 // Catálogo de solos e classificações secundárias.
-// Mantém os códigos da versão 1 para que projetos antigos continuem válidos.
 
 export const SOLOS = [
   { code: 'ARGS', label: 'ARGS — Argila siltosa', fill: '#FAEEDA', hatch: 'argila', hex: '#BA7517' },

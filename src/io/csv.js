@@ -1,6 +1,5 @@
 // Importação de sondagens a partir de CSV ou de planilhas (linhas já lidas).
-// Colunas reconhecidas pelo cabeçalho; o formato antigo de 6 colunas sem
-// cabeçalho (furo, de, ate, primario, secundario, nspt) continua aceito.
+// As colunas são reconhecidas pelo cabeçalho; a coluna "furo" é obrigatória.
 import { novoFuro, novaCamada, setSpt, num } from '../model/projeto.js';
 import { soloPorCodigo, secPorValor, SOLO_PADRAO } from '../model/catalogo.js';
 
@@ -18,7 +17,6 @@ const ALIASES = {
   prof: ['prof', 'profundidade', 'metro', 'cota_spt', 'prof_m'],
   nspt: ['nspt', 'n_spt', 'spt', 'n_golpes'],
 };
-const LEGADO = ['furo', 'de', 'ate', 'primario', 'secundario', 'nspt'];
 
 export const normalizarCabecalho = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
   .toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -55,20 +53,14 @@ export function lerCSV(texto, sep = 'auto') {
 
 /** Transforma uma tabela (array de linhas) em registros { furo, x, de, ... }. */
 export function interpretarTabela(linhas) {
-  if (!linhas.length) return { registros: [], colunas: [], legado: false };
+  if (!linhas.length) return { registros: [], colunas: [] };
   const cab = linhas[0].map(normalizarCabecalho);
   const mapa = {};
   cab.forEach((h, i) => {
     for (const [campo, nomes] of Object.entries(ALIASES)) if (nomes.includes(h) && !(campo in mapa)) mapa[campo] = i;
   });
-  let corpo = linhas.slice(1), legado = false;
-  if (!('furo' in mapa)) {
-    // sem cabeçalho reconhecível: formato antigo posicional
-    legado = true;
-    LEGADO.forEach((c, i) => { mapa[c] = i; });
-    corpo = Number.isFinite(num(linhas[0][1], NaN)) ? linhas : linhas.slice(1);
-  }
-  const registros = corpo.map((l) => {
+  if (!('furo' in mapa)) return { registros: [], colunas: [] };
+  const registros = linhas.slice(1).map((l) => {
     const r = {};
     for (const [campo, i] of Object.entries(mapa)) {
       const v = l[i];
@@ -76,7 +68,7 @@ export function interpretarTabela(linhas) {
     }
     return r;
   }).filter((r) => r.furo);
-  return { registros, colunas: Object.keys(mapa), legado };
+  return { registros, colunas: Object.keys(mapa) };
 }
 
 /**
@@ -85,7 +77,7 @@ export function interpretarTabela(linhas) {
  */
 export function aplicarImportacao(projeto, registros) {
   const res = { furosNovos: 0, furosAtualizados: new Set(), camadas: 0, spt: 0, avisos: [] };
-  const codigosDesconhecidos = new Set(), semCoord = new Set(), ignoradas = [];
+  const codigosDesconhecidos = new Set(), semCoord = new Set(), ignoradas = [], semProf = [];
   const furoPorNome = new Map(projeto.furos.map((f) => [f.nome, f]));
   const coordInformada = new Set();
   const existentes = new Set(projeto.furos.map((f) => f.nome));
@@ -117,11 +109,9 @@ export function aplicarImportacao(projeto, registros) {
     }
 
     const n = num(r.nspt, NaN);
-    if (Number.isFinite(n)) {
-      const prof = num(r.prof, NaN);
-      if (Number.isFinite(prof)) { setSpt(f, Math.round(prof), n); res.spt++; }
-      else if (temCamada) { setSpt(f, Math.max(1, Math.round((de + ate) / 2)), n); res.spt++; }
-    }
+    const prof = num(r.prof, NaN);
+    if (Number.isFinite(n) && Number.isFinite(prof)) { setSpt(f, Math.round(prof), n); res.spt++; }
+    else if (Number.isFinite(n)) semProf.push(idx + 1);
   });
 
   // furos novos sem coordenadas: espalha em linha ao lado dos existentes
@@ -134,6 +124,7 @@ export function aplicarImportacao(projeto, registros) {
     res.avisos.push(`Sem coordenadas (posicionados em linha, ajuste depois): ${semXY.map((f) => f.nome).join(', ')}.`);
   }
   if (codigosDesconhecidos.size) res.avisos.push(`Códigos de solo desconhecidos, trocados por ${SOLO_PADRAO}: ${[...codigosDesconhecidos].join(', ')}.`);
+  if (semProf.length) res.avisos.push(`N-SPT sem a coluna "prof" ignorado nas linhas: ${semProf.slice(0, 10).join(', ')}${semProf.length > 10 ? '…' : ''}.`);
   if (ignoradas.length) res.avisos.push(`Camadas ignoradas (de/até inválidos) nas linhas: ${ignoradas.slice(0, 10).join(', ')}${ignoradas.length > 10 ? '…' : ''}.`);
   res.furosAtualizados = res.furosAtualizados.size;
   return res;
