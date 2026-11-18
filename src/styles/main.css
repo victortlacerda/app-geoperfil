@@ -177,6 +177,8 @@ button,input,select{font-family:var(--f)}
 .grid-table .bar-cell{padding:0 8px}
 .grid-table .bar-cell .spt-bw{height:7px}
 .grid-table col.c-m{width:96px}.grid-table col.c-cls{width:110px}.grid-table col.c-sec{width:120px}
+.grid-table col.c-del{width:28px}.grid-table .del-cell{text-align:center}
+.grid-table tr:hover .del-btn-r,.grid-table .del-btn-r:focus{opacity:1}
 .grid-table col.c-n{width:64px}.grid-table col.c-g{width:52px}.grid-table col.c-bar{width:90px}
 .grid-foot{display:flex;align-items:center;gap:10px;padding:6px 10px;border-top:.5px solid var(--br);background:var(--bg)}
 .grid-foot .hint{padding:0}

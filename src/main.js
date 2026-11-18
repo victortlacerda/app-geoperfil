@@ -195,6 +195,7 @@ const acoes = {
   novoFuro() { abrirModalFuro(); },
   modoSPT(m) { store.commit((d) => { d.projeto.modoSPT = m; }); },
   maisMetro() { camadas.maisMetro(); },
+  menosMetro() { camadas.menosMetro(); },
   restaurarCores() { camadas.restaurarCores(); },
   async boletimPDF() {
     const f = app.furoAtual();

@@ -118,6 +118,20 @@ export function criarCamadas(app) {
     }
   });
 
+  // ── apagar um metro (✕) ──
+  body.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-limpar]');
+    if (!b) return;
+    const m = +b.dataset.limpar, f = app.furoAtual();
+    if (!f) return;
+    const total = numLinhas(f, { minimo: minLinhas() });
+    if (getMetro(f, m)) {
+      editarFuro((q) => { q.metros = q.metros.filter((r) => r.m !== m); });
+      app.toast(`${m} m apagado (Ctrl+Z desfaz).`);
+    } else if (m === total) menosMetro();
+    else app.toast('Esse metro já está vazio.');
+  });
+
   // ── colar do Excel ──
   body.addEventListener('paste', (e) => {
     const el = e.target, tr = el.closest('tr[data-m]');
@@ -204,8 +218,8 @@ export function criarCamadas(app) {
     const golpes = modo() === 'golpes';
     head.innerHTML = `<tr><th>Prof.</th><th>Primária</th><th>Secundária</th><th>Descrição</th>${golpes
       ? '<th title="Golpes nos 1ºs 15 cm">1º 15</th><th title="Golpes nos 2ºs 15 cm">2º 15</th><th title="Golpes nos 3ºs 15 cm">3º 15</th><th>N</th>'
-      : '<th>N-SPT</th>'}<th></th></tr>`;
-    const cols = `<colgroup><col class="c-m"><col class="c-cls"><col class="c-sec"><col>${golpes ? '<col class="c-g"><col class="c-g"><col class="c-g"><col class="c-n">' : '<col class="c-n">'}<col class="c-bar"></colgroup>`;
+      : '<th>N-SPT</th>'}<th></th><th></th></tr>`;
+    const cols = `<colgroup><col class="c-m"><col class="c-cls"><col class="c-sec"><col>${golpes ? '<col class="c-g"><col class="c-g"><col class="c-g"><col class="c-n">' : '<col class="c-n">'}<col class="c-bar"><col class="c-del"></colgroup>`;
     const old = document.querySelector('#grid colgroup'); if (old) old.remove();
     head.insertAdjacentHTML('beforebegin', cols);
 
@@ -227,6 +241,7 @@ export function criarCamadas(app) {
         <td><input data-col="desc" data-key="desc:${l.m}" value="${esc(r.desc ?? '')}"/></td>
         ${sptCell}
         <td class="bar-cell">${n ? `<div class="spt-bw"><div class="spt-b" style="width:${Math.min(n.valor / 50, 1) * 100}%;background:${corN(n.valor)}"></div></div>` : ''}</td>
+        <td class="del-cell"><button class="del-btn-r" data-limpar="${l.m}" title="${r.m ? `Apagar o que foi digitado no ${l.m} m` : l.m === linhas.length ? `Remover a linha do ${l.m} m` : 'Metro vazio'}">✕</button></td>
       </tr>`;
     }).join('');
   }
@@ -349,13 +364,25 @@ export function criarCamadas(app) {
   function maisMetro() {
     const f = app.furoAtual(); if (!f) return;
     const atual = f.profTotal || numLinhas(f, { minimo: minLinhas() });
+    delete app.ui.linhasMin[f.id];
     editarFuro((q) => { q.profTotal = +(atual + 1).toFixed(2); });
     gridWrap.scrollTop = gridWrap.scrollHeight;
   }
 
+  /** Remove a última linha do boletim (se estiver vazia), fixando a profundidade limite. */
+  function menosMetro() {
+    const f = app.furoAtual(); if (!f) return;
+    const total = numLinhas(f, { minimo: minLinhas() });
+    if (total <= 1) return;
+    if (getMetro(f, total)) { app.toast(`O ${total} m tem dados. Apague com o ✕ da linha antes de remover.`, 5000); return; }
+    delete app.ui.linhasMin[f.id];
+    editarFuro((q) => { q.profTotal = total - 1; });
+    app.toast(`Profundidade limite: ${total - 1} m.`);
+  }
+
   function restaurarCores() { app.store.commit((d) => { d.cores = {}; }); }
 
-  return { render, drawChart, maisMetro, restaurarCores };
+  return { render, drawChart, maisMetro, menosMetro, restaurarCores };
 }
 
 /** Re-renderiza sem perder o campo em foco (identificado por data-key). */
