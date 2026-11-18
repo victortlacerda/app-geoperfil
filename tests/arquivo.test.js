@@ -7,7 +7,7 @@ import { buildZones } from '../src/geo/zonas.js';
 describe('arquivo de projeto', () => {
   it('salvar e abrir de novo devolve o mesmo projeto', () => {
     const p = projetoExemplo();
-    p.cortes.push({ id: 'c1', nome: "A–A'", p1: [0, 400], p2: [220, 400], lado: 1, faixa: 40 });
+    p.cortes.push({ id: 'c1', nome: "A–A'", p1: [0, 400], p2: [220, 400], lado: 1, faixa: 40, incluir: 'lado' });
     expect(carregarProjeto(JSON.parse(serializar(p)))).toEqual(p);
   });
 

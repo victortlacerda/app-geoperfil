@@ -27,7 +27,7 @@ const store = criarStore(inicial || projetoExemplo(), { storage });
 
 const ui = {
   view: 'planta', furoId: null, corteId: null, metroSel: null, rp: 'chart', linhasMin: {},
-  graficoOculto: new Set(), tool: 'furo', faixa: 50,
+  graficoOculto: new Set(), tool: 'furo', faixa: 50, incluir: 'lado',
   planta: { k: 2, cx: 0, cy: 0 },
   perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0 },
 };
@@ -98,6 +98,7 @@ store.assinar(() => render());
 function sincronizarFaixa() {
   const c = app.corteAtivo();
   const faixa = c ? c.faixa : ui.faixa;
+  $('faixaAmbos').checked = (c ? c.incluir : ui.incluir) === 'ambos';
   $('faixaTodos').checked = faixa === null;
   $('faixaInput').disabled = faixa === null;
   if (faixa !== null) $('faixaInput').value = faixa;
@@ -106,14 +107,16 @@ function aplicarFaixa() {
   const todos = $('faixaTodos').checked;
   const v = Math.max(1, num($('faixaInput').value, 50));
   const faixa = todos ? null : v;
+  const incluir = $('faixaAmbos').checked ? 'ambos' : 'lado';
   $('faixaInput').disabled = todos;
-  ui.faixa = faixa;
+  ui.faixa = faixa; ui.incluir = incluir;
   const c = app.corteAtivo();
-  if (c && c.faixa !== faixa) store.commit((d) => { d.cortes.find((q) => q.id === c.id).faixa = faixa; }, { agrupar: 'faixa:' + c.id });
+  if (c && (c.faixa !== faixa || c.incluir !== incluir)) store.commit((d) => { Object.assign(d.cortes.find((q) => q.id === c.id), { faixa, incluir }); }, { agrupar: 'faixa:' + c.id });
   else render();
 }
 $('faixaInput').addEventListener('change', aplicarFaixa);
 $('faixaTodos').addEventListener('change', aplicarFaixa);
+$('faixaAmbos').addEventListener('change', aplicarFaixa);
 
 // ── modal de furo ────────────────────────────────────────
 function abrirModalFuro(pos = null) {

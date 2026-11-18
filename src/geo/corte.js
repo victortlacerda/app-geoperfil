@@ -18,15 +18,21 @@ export function projectPoint(px, py, ax, ay, bx, by) {
 export const comprimento = (c) => Math.hypot(c.p2[0] - c.p1[0], c.p2[1] - c.p1[1]);
 
 /**
- * Furos incluídos no corte. A faixa é simétrica: entram os furos a até
- * `faixa` metros da linha, dos dois lados, e cuja projeção cai no trecho
- * A–A' (com a mesma tolerância nas pontas). faixa = null inclui todos.
+ * Furos incluídos no corte.
+ * - incluir = 'lado' (padrão): só os furos do lado clicado (`lado`); 'ambos': dos dois lados.
+ * - faixa: distância máxima à linha (m), com a mesma tolerância além das pontas A e A'.
+ *   faixa = null não limita a distância.
  */
 export function furosNoCorte(corte, furos) {
   const [ax, ay] = corte.p1, [bx, by] = corte.p2;
   const len = comprimento(corte);
   if (len < 1e-9) return [];
+  const soUmLado = corte.incluir !== 'ambos' && corte.lado;
   return furos.filter((f) => {
+    if (soUmLado) {
+      const s = sideOfLine(f.x, f.y, ax, ay, bx, by);
+      if (s !== 0 && s !== corte.lado) return false;
+    }
     if (corte.faixa === null || corte.faixa === undefined) return true;
     const pr = projectPoint(f.x, f.y, ax, ay, bx, by);
     const s = pr.t * len;

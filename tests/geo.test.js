@@ -24,9 +24,19 @@ describe('geometria do corte', () => {
     novoFuro({ nome: 'alem-da-ponta', x: 160, y: 0 }),
     novoFuro({ nome: 'ponta-tolerada', x: 120, y: 0 }),
   ];
-  const corte = { p1: [0, 0], p2: [100, 0], lado: 1, faixa: 30 };
+  const corte = { p1: [0, 0], p2: [100, 0], lado: 1, faixa: 30, incluir: 'ambos' };
 
-  it('faixa simétrica inclui furos dos dois lados da linha', () => {
+  it('por padrão só entram os furos do lado clicado', () => {
+    const umLado = { p1: [0, 0], p2: [100, 0], lado: 1, faixa: 30 };
+    expect(furosNoCorte(umLado, furos).map((f) => f.nome)).toEqual(['acima', 'ponta-tolerada']);
+    expect(furosNoCorte({ ...umLado, lado: -1 }, furos).map((f) => f.nome)).toEqual(['abaixo', 'ponta-tolerada']);
+  });
+
+  it('um lado, sem limite de distância: todos os furos daquele lado', () => {
+    expect(furosNoCorte({ p1: [0, 0], p2: [100, 0], lado: 1, faixa: null }, furos).map((f) => f.nome)).toEqual(['acima', 'longe', 'alem-da-ponta', 'ponta-tolerada']);
+  });
+
+  it('opção dois lados: faixa simétrica inclui furos dos dois lados da linha', () => {
     const nomes = furosNoCorte(corte, furos).map((f) => f.nome);
     expect(nomes).toContain('acima');
     expect(nomes).toContain('abaixo');

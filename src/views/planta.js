@@ -105,15 +105,17 @@ export function criarPlanta(app) {
     ctx.restore();
   }
 
-  function drawFaixa(ctx, p1, p2, faixa) {
+  /** Faixa de inclusão: dos dois lados, ou só do `lado` (+1 / −1) quando informado. */
+  function drawFaixa(ctx, p1, p2, faixa, lado = null) {
     if (faixa === null || faixa === undefined) return;
     const dx = p2[0] - p1[0], dy = p2[1] - p1[1], len = Math.hypot(dx, dy);
     if (len < 1e-6) return;
     const ux = dx / len, uy = dy / len, px = -uy * faixa, py = ux * faixa;
     const e = faixa; // tolerância nas pontas
+    const a = lado ? Math.max(lado, 0) : 1, b = lado ? Math.min(lado, 0) : -1; // multiplicadores da normal
     const cantos = [
-      [p1[0] - ux * e + px, p1[1] - uy * e + py], [p2[0] + ux * e + px, p2[1] + uy * e + py],
-      [p2[0] + ux * e - px, p2[1] + uy * e - py], [p1[0] - ux * e - px, p1[1] - uy * e - py],
+      [p1[0] - ux * e + px * a, p1[1] - uy * e + py * a], [p2[0] + ux * e + px * a, p2[1] + uy * e + py * a],
+      [p2[0] + ux * e + px * b, p2[1] + uy * e + py * b], [p1[0] - ux * e + px * b, p1[1] - uy * e + py * b],
     ].map(([x, y]) => toS(x, y));
     ctx.save(); ctx.beginPath();
     cantos.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
@@ -136,7 +138,7 @@ export function criarPlanta(app) {
     if (corte.step > 0 && corte.p1) {
       const fim = corte.p2 || corte.preview;
       if (fim) drawFaixa(ctx, corte.p1, fim, app.ui.faixa);
-    } else if (ativo) drawFaixa(ctx, ativo.p1, ativo.p2, ativo.faixa);
+    } else if (ativo) drawFaixa(ctx, ativo.p1, ativo.p2, ativo.faixa, ativo.incluir === 'ambos' ? null : ativo.lado);
 
     cortes.forEach((c) => {
       const isA = ativo && c.id === ativo.id;
@@ -197,7 +199,7 @@ export function criarPlanta(app) {
 
     document.getElementById('ps-furos').textContent = `${furos.length} furos`;
     document.getElementById('ps-corte').textContent = ativo
-      ? `${ativo.nome}: ${furosNoCorte(ativo, furos).length} furo(s) · faixa ${ativo.faixa === null ? 'sem limite' : ativo.faixa + ' m'}`
+      ? `${ativo.nome}: ${furosNoCorte(ativo, furos).length} furo(s) · ${ativo.incluir === 'ambos' ? 'dois lados' : 'um lado'} · faixa ${ativo.faixa === null ? 'sem limite' : ativo.faixa + ' m'}`
       : 'Nenhum corte';
   }
 
@@ -302,7 +304,7 @@ export function criarPlanta(app) {
         const [ax, ay] = toS(...corte.p1);
         if (Math.hypot(sx - ax, sy - ay) < 20) return;
         corte.p2 = [x, y]; corte.preview = null; corte.step = 2;
-        app.setStatus('Clique de um lado da linha para indicar o sentido de vista', 'corte'); draw(); return;
+        app.setStatus(app.ui.incluir === 'ambos' ? 'Clique de um lado da linha para indicar o sentido de vista' : 'Clique do lado dos furos que entram no corte', 'corte'); draw(); return;
       }
       if (corte.step === 2) {
         const s = sideOfLine(x, y, corte.p1[0], corte.p1[1], corte.p2[0], corte.p2[1]);
@@ -310,7 +312,7 @@ export function criarPlanta(app) {
         const novo = {
           id: uid('c'), nome: proximoNomeCorte(app.store.doc.cortes),
           p1: corte.p1.map((n) => +n.toFixed(2)), p2: corte.p2.map((n) => +n.toFixed(2)),
-          lado: s, faixa: app.ui.faixa,
+          lado: s, faixa: app.ui.faixa, incluir: app.ui.incluir,
         };
         app.store.commit((d) => { d.cortes.push(novo); });
         app.ui.corteId = novo.id;

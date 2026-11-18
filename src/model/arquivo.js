@@ -17,6 +17,7 @@ export function carregarProjeto(dados) {
     p2: [num(c.p2?.[0]), num(c.p2?.[1])],
     lado: Math.sign(c.lado) || 1,
     faixa: c.faixa === null || c.faixa === undefined ? null : num(c.faixa, 50),
+    incluir: c.incluir === 'ambos' ? 'ambos' : 'lado',
   }));
   return p;
 }
