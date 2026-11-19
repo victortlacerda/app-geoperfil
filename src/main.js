@@ -27,11 +27,13 @@ if (salvo) {
 }
 const store = criarStore(inicial || projetoExemplo(), { storage });
 
+// opções do modelo 3D ao abrir o app (o botão Redefinir volta a elas)
+const M3D_PADRAO = () => ({ exagero: 3, furos: true, spt: false, na: true, grama: true, cortar: true, raiox: false, grade: true, deslocamento: 0, ocultos: new Set(), opacidade: {} });
 const ui = {
   view: 'planta', furoId: null, corteId: null, metroSel: null, rp: 'chart', linhasMin: {},
   graficoOculto: new Set(), tool: 'furo', faixa: 50, incluir: 'lado',
   planta: { k: 2, cx: 0, cy: 0 },
-  m3d: { exagero: 3, furos: true, spt: false, na: true, grama: true, cortar: true, raiox: false, grade: true, deslocamento: 0, ocultos: new Set(), opacidade: {} },
+  m3d: M3D_PADRAO(),
   perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0, modo: 'interpolado', editar: false },
 };
 
@@ -117,6 +119,12 @@ document.querySelectorAll('[data-m3d]').forEach((el) => el.addEventListener('cha
   if (el.dataset.m3d === 'cortar') modelo3d?.reenquadrar();
   modelo3d?.render();
 }));
+/** Controles da barra do 3D refletem ui.m3d. */
+function sincronizar3D() {
+  document.querySelectorAll('[data-m3d]').forEach((el) => { el.checked = !!ui.m3d[el.dataset.m3d]; });
+  $('m3dEx').value = ui.m3d.exagero; $('m3dExVal').textContent = `${ui.m3d.exagero}×`;
+  $('m3dDesl').value = ui.m3d.deslocamento; $('m3dDeslVal').textContent = `${ui.m3d.deslocamento} m`;
+}
 $('m3dEx').addEventListener('input', () => { const v = +$('m3dEx').value; $('m3dExVal').textContent = `${v}×`; modelo3d?.definirExagero(v); });
 $('m3dDesl').addEventListener('input', () => { ui.m3d.deslocamento = +$('m3dDesl').value; $('m3dDeslVal').textContent = `${ui.m3d.deslocamento} m`; modelo3d?.render(); });
 
@@ -342,6 +350,12 @@ const acoes = {
     } catch (e) { toast('Erro ao gerar o PDF: ' + e.message, 6000); }
   },
   vista3d(t) { modelo3d?.vista(t); },
+  redefinir3d() {
+    Object.assign(ui.m3d, M3D_PADRAO());
+    sincronizar3D();
+    modelo3d?.reenquadrar();
+    modelo3d?.render();
+  },
   async capturar3d() {
     if (!modelo3d) return;
     const blob = await modelo3d.capturar();

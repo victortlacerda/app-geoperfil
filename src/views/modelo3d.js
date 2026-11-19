@@ -35,6 +35,13 @@ export function criarModelo3D(app) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.12;
+  // como num CAD: botão esquerdo move (pan), botão do meio (rodinha pressionada) gira, rodinha dá zoom
+  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.ROTATE };
+  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+  controls.screenSpacePanning = true;
+  controls.zoomToCursor = true; // o zoom vai na direção do cursor
+  // evita a rolagem automática do navegador ao apertar a rodinha
+  renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
   scene.add(new THREE.HemisphereLight(0xf2f6fb, 0x7d6f5c, 1.7));
   const sol = new THREE.DirectionalLight(0xffffff, 1.9);
   sol.position.set(0.55, 1, 0.35);
