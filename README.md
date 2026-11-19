@@ -1,68 +1,127 @@
 # GeoPerfil
 
-App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento de furos em planta, camadas e N-SPT por furo, cortes com faixa de inclusão, perfil 2D com hachuras e exportação DXF/PDF.
+**Da sondagem SPT ao perfil geotécnico e ao modelo 3D do terreno, direto no navegador.**
 
-> Versão 2 em desenvolvimento: reestruturação completa do app.
+Lance os furos na planta, preencha o boletim metro a metro e trace o corte. O GeoPerfil correlaciona as camadas entre os furos, desenha o perfil 2D com hachuras e monta o bloco geológico em 3D. Tudo sai pronto para o projeto: PDF em A3 com carimbo, boletim individual em PDF e DXF para o CAD.
 
-## Funcionalidades
+**[▶ Abrir o GeoPerfil](https://victortlacerda.github.io/app-geoperfil/)**: grátis, sem cadastro e sem instalar nada. O projeto de exemplo já vem carregado.
 
-- **Planta georreferenciada**: coordenadas UTM SIRGAS 2000 (fusos 18–25 S e 18–22 N) com mapa de fundo OpenStreetMap ou satélite, ou coordenadas locais sem mapa. Furos podem ser lançados em UTM ou em latitude/longitude, arrastados no mapa, e há uma ferramenta para medir distâncias.
-- **Cortes**: o lado clicado define quais furos entram (ou os dois lados, como opção), dentro de uma faixa de distância à linha.
-- **Boletim metro a metro** por furo: profundidade limite, critério de parada, NA e cota no topo; os metros já aparecem prontos para preencher.
-  - Classificação sem valor padrão. Metro vazio repete a classificação de cima, então AREA no 1 m e AREA no 5 m formam uma camada só. Metros seguidos com a mesma classificação viram uma camada.
-  - Enter ou Tab vão para o próximo metro; a alça ▪ arrasta a classificação para outros metros; dá para colar colunas do Excel.
-  - N-SPT metro a metro (padrão) ou, como opção, golpes por 15 cm (N = 2º + 3º trechos). Penetração incompleta como `30/12`.
-  - Cada classificação tem uma cor só no projeto inteiro (editável).
-  - **Boletim em PDF** do furo: perfil com hachuras, classificação e descrição, N-SPT, gráfico, NA e fim da sondagem.
-- **Perfil 2D com contatos interpolados**: as camadas de furos vizinhos são correlacionadas (mesma classificação, na mesma ordem) e ligadas em linha reta; camada sem par acunha no meio do vão; trecho sem correlação vira uma transição lateral. Terreno e fundo ficam sempre retos entre os furos. As pontas de acunhamento e as transições podem ser arrastadas ("Ajustar contatos"), e o ajuste fica salvo no corte. Opção "Degrau" para a troca simples no meio do vão.
-- **Modelo 3D** (three.js): bloco geológico sólido gerado a partir dos furos. As sequências de camadas são correlacionadas numa coluna comum, e a cota do terreno, a espessura de cada camada e o NA são interpolados entre os furos (spline de placa fina, exata nos furos). O bloco tem terreno, camadas empilhadas, paredes de solo nas bordas, NA e furos, e abre em corte no alinhamento do corte ativo, com os furos do corte e o N-SPT na face. Tem exagero vertical, raio-X, transparência e visibilidade por classificação, régua de cotas, coordenadas, norte e captura de imagem.
-- **PDF do perfil em A3** com escalas padrão (horizontal e vertical), exagero vertical, escala gráfica, legenda e carimbo.
-- **Exportação**: DXF R12 (planta + perfil com os mesmos contatos interpolados, layers por solo), PDF do perfil, projeto em JSON e furos/cortes em **GeoJSON** e **KML** (Google Earth).
-- **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`), inclusive planilhas com abas separadas, e de pontos em GeoJSON/KML.
-- **Desfazer/refazer** (Ctrl+Z / Ctrl+Y) e salvamento automático no navegador.
+[![Testes e deploy](https://github.com/victortlacerda/app-geoperfil/actions/workflows/pages.yml/badge.svg)](https://github.com/victortlacerda/app-geoperfil/actions/workflows/pages.yml)
+
+![Modelo 3D do terreno aberto no corte A–A', com as camadas interpoladas entre os furos](docs/img/modelo-3d-corte.jpg)
+
+## Por que usar
+
+- **Menos retrabalho no CAD.** O perfil sai com os contatos já interpolados entre os furos, as hachuras, a régua de N-SPT, o NA, as escalas e a legenda. O DXF tem uma layer por solo e textos no tamanho certo para plotar.
+- **Lançamento rápido.** Os metros já aparecem prontos até a profundidade limite. Enter ou Tab pula para o próximo, metro vazio repete a classificação de cima e dá para colar colunas direto do Excel.
+- **Coordenadas reais.** UTM SIRGAS 2000 ou latitude/longitude, com mapa de fundo, e exportação para o Google Earth.
+- **Visão 3D do subsolo** para apresentar ao cliente e à equipe, a partir dos mesmos dados do perfil.
+- **Seus dados ficam com você.** O app roda no navegador e salva o projeto automaticamente no seu computador. Nada é enviado para servidor.
+
+## Como funciona
+
+1. **Planta**: lance os furos por clique, por coordenadas ou importando CSV, XLSX, GeoJSON ou KML.
+2. **Boletim**: preencha classificação, descrição e N-SPT de cada metro.
+3. **Corte**: trace a linha na planta. O lado em que você clica define quais furos entram.
+4. **Entregue**: PDF do perfil em A3, boletim em PDF, DXF, modelo 3D e imagens.
+
+## Planta georreferenciada
+
+Furos e cortes em coordenadas UTM SIRGAS 2000 (fusos 18 a 25 S e 18 a 22 N) ou locais, sobre mapa OpenStreetMap, satélite ou sem mapa. A faixa do corte mostra quais furos entram no perfil, e a ferramenta de medir dá distâncias na hora.
+
+![Planta com os furos e o corte A–A', com a faixa de inclusão](docs/img/planta.jpg)
+
+## Boletim metro a metro
+
+A coluna do furo é desenhada enquanto você digita. O N-SPT pode ser lançado metro a metro ou por golpes a cada 15 cm, com penetração incompleta no formato `30/12`. O gráfico de N-SPT compara todos os furos, e o boletim de cada furo sai em PDF.
+
+![Boletim do SP-01 com a coluna, a tabela metro a metro e o gráfico de N-SPT](docs/img/boletim.jpg)
+
+## Perfil 2D com contatos interpolados
+
+Camadas de mesma classificação são correlacionadas entre furos vizinhos e ligadas em linha reta. Uma camada que só existe num furo acunha no meio do vão, e um trecho sem correlação vira transição lateral. Se a interpretação pedir, arraste as pontas e as transições com **Ajustar contatos**: o ajuste fica salvo no corte e vai junto para o PDF e o DXF.
+
+![Perfil 2D do corte A–A' com hachuras, régua de N-SPT, NA e legenda](docs/img/perfil-2d.jpg)
+
+## Modelo 3D do terreno
+
+Um bloco geológico sólido montado a partir dos furos. A cota do terreno, a espessura de cada camada e o NA são interpolados com uma superfície suave que passa exatamente pelos valores de cada sondagem. O bloco abre no alinhamento do corte ativo e mostra os furos e o N-SPT na face.
+
+| Bloco inteiro | Face do corte A–A' |
+|---|---|
+| ![Bloco geológico inteiro com grama no topo e camadas nas paredes](docs/img/modelo-3d-bloco.jpg) | ![Face do corte com os furos SP-01, SP-02 e SP-03 e o N-SPT](docs/img/modelo-3d-face.jpg) |
+
+Também tem exagero vertical, raio-X para ver os furos por dentro e transparência e visibilidade por classificação. Há ainda régua de cotas, coordenadas e norte. Passando o mouse, aparecem a camada e a cota daquele ponto, e a vista pode ser salva em imagem.
+
+## Pronto para entregar
+
+| PDF do perfil em A3 | Boletim de sondagem em PDF |
+|---|---|
+| ![PDF do perfil em A3 com escalas, legenda e carimbo](docs/img/pdf-perfil-a3.jpg) | ![Boletim de sondagem SP-01 em PDF](docs/img/pdf-boletim.jpg) |
+
+**PDF do perfil em A3**: escalas horizontal e vertical padronizadas, exagero vertical, escala gráfica, legenda e carimbo.
+
+**Boletim em PDF**: perfil do furo com hachuras, classificação e descrição, N-SPT, gráfico, NA e critério de parada.
+
+**DXF para o CAD**: perfil no mesmo layout e nas mesmas escalas do PDF, com uma layer por solo, hachura que não passa por cima dos textos e a planta de locação.
+
+![Perfil em DXF aberto num visualizador de CAD](docs/img/dxf-perfil.jpg)
+
+## Formatos
+
+| Entrada | Saída |
+|---|---|
+| CSV e XLSX (furos, camadas e N-SPT, inclusive com abas separadas) | DXF R12 (perfil e planta) |
+| GeoJSON e KML (pontos) | PDF do perfil (A3) e PDF do boletim |
+| Projeto GeoPerfil (JSON) | GeoJSON e KML (Google Earth), projeto em JSON, imagem do modelo 3D |
+
+A importação reconhece os cabeçalhos `furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`. Modelos de CSV e XLSX podem ser baixados dentro do app.
 
 ## Desenvolvimento
+
+Feito em JavaScript com Vite, three.js, Leaflet, proj4 e jsPDF. As funções de cálculo (correlação de camadas, interpolação, escalas, DXF) são separadas da interface e cobertas por 113 testes automatizados (Vitest).
 
 ```bash
 npm install
 npm run dev      # servidor local
-npm test         # testes (Vitest)
+npm test         # testes
 npm run build    # gera dist/
 ```
 
-A cada push na `main`, o GitHub Actions roda os testes e publica `dist/` no GitHub Pages.
+A cada push na `main`, o GitHub Actions roda os testes e publica o site no GitHub Pages.
 
-## Estrutura
+<details>
+<summary>Estrutura do código e formato do projeto</summary>
 
 ```
 src/
   main.js          ligação entre estado, vistas e ações
   store.js         estado do projeto, desfazer/refazer, salvamento automático
   model/           catálogo de solos, modelo de dados e arquivo de projeto
-  geo/             geometria do corte e zonas do perfil
-  views/           planta, camadas, perfil e hachuras (canvas)
-  io/              CSV/XLSX, DXF, arquivos
+  geo/             corte, perfil 2D (correlação), modelo em bloco 3D, coordenadas
+  views/           planta, boletim, perfil 2D e modelo 3D
+  io/              CSV/XLSX, DXF, PDFs, GeoJSON/KML, hachuras, escalas
   styles/
 tests/             testes unitários
 ```
 
-## Formato do projeto (v2)
-
-Tudo em metros. `x` = Leste, `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` quando `crs` = `utm`; coordenadas locais quando `crs` = `local`). `metros` guarda só o que foi digitado; o metro *m* vai de *m − 1* a *m*. Classificação vazia repete a de cima, e as camadas são calculadas a partir disso.
+Tudo em metros. `x` = Leste e `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` quando `crs` = `utm`, coordenadas locais quando `crs` = `local`). `metros` guarda só o que foi digitado, e o metro *m* vai de *m − 1* a *m*. Classificação vazia repete a de cima, e as camadas são calculadas a partir disso.
 
 ```json
 {
   "version": 2,
   "projeto": { "nome": "Obra X", "crs": "utm", "fusoUTM": "23S", "fundo": "mapa", "modoSPT": "metro" },
   "cores": { "ARE": "#97C459" },
-  "furos": [{ "id": "…", "nome": "SP-01", "x": 40, "y": 400, "cota": 842.5, "na": 3.2,
-              "profTotal": 15.45, "parada": "imp_percussao",
+  "furos": [{ "id": "…", "nome": "SP-01", "x": 333040, "y": 7394000, "cota": 842.5, "na": 3.2,
+              "profTotal": 15, "parada": "imp_percussao",
               "metros": [{ "m": 1, "codigo": "ARGS", "origem": "ATR", "desc": "Argila siltosa marrom", "spt": "3" },
                          { "m": 2, "spt": "4" },
                          { "m": 3, "codigo": "ARE", "golpes": ["5", "6", "7"] }] }],
-  "cortes": [{ "id": "…", "nome": "A–A'", "p1": [20, 395], "p2": [230, 395], "lado": -1, "faixa": 40 }]
+  "cortes": [{ "id": "…", "nome": "A–A'", "p1": [333020, 7393985], "p2": [333220, 7394005], "lado": 1, "faixa": 40 }]
 }
 ```
+
+</details>
 
 ## Roadmap
 
@@ -72,4 +131,4 @@ Tudo em metros. `x` = Leste, `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` quan
 - [x] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000, GeoJSON/KML)
 - [x] Fase 4 — Perfil 2D v2 (contatos interpolados, ajuste manual, PDF A3 com carimbo, DXF)
 - [x] Fase 5 — Modelo 3D com three.js (bloco geológico interpolado, corte no alinhamento do corte ativo)
-- [ ] Fase 6 — Integrações e portfólio
+- [ ] Fase 6 — Classificação SUCS e integração com os apps de fundações
