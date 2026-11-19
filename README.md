@@ -39,7 +39,7 @@ A coluna do furo é desenhada enquanto você digita. O N-SPT pode ser lançado m
 
 ## Perfil 2D com contatos interpolados
 
-Camadas de mesma classificação são correlacionadas entre furos vizinhos e ligadas em linha reta. Uma camada que só existe num furo acunha no meio do vão, e um trecho sem correlação vira transição lateral. Se a interpretação pedir, arraste as pontas e as transições com **Ajustar contatos**: o ajuste fica salvo no corte e vai junto para o PDF e o DXF.
+Camadas de mesma classificação são correlacionadas entre furos vizinhos e ligadas em linha reta. Uma camada que só existe num furo acunha no meio do vão, e um trecho sem correlação vira transição lateral. Se a interpretação pedir, arraste as pontas e as transições com **Ajustar contatos**: o ajuste fica salvo no corte e vai junto para o PDF e o DXF. O desenho pode ser **Interpolado** (contatos em linha reta), **Suave** (terreno, NA e contatos em curva, que passam pelos furos sem ultrapassar os valores deles) ou **Degrau** (troca de material no meio do vão), escolhido por corte.
 
 ![Perfil 2D do corte A–A' com hachuras, régua de N-SPT, NA e legenda](docs/img/perfil-2d.jpg)
 

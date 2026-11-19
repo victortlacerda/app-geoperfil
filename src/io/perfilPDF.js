@@ -18,7 +18,7 @@ const fmt = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d).replace('.', ',') :
  * @param perfil { bhs, ext, corte, geo? }
  * @param opcoes { axis: 'cota'|'prof', modo, data }
  */
-export function gerarPerfilPDF(projeto, perfil, { axis = 'cota', modo = 'interpolado', data = new Date() } = {}) {
+export function gerarPerfilPDF(projeto, perfil, { axis = 'cota', modo = perfil.corte?.modo || 'interpolado', data = new Date() } = {}) {
   const { bhs, corte } = perfil;
   if (!bhs || bhs.length < 2) throw new Error('O corte precisa de pelo menos 2 furos para gerar o perfil.');
   const geo = perfil.geo || geometriaPerfil(bhs, { ajustes: corte?.ajustes || {}, modo });
@@ -126,7 +126,7 @@ export function gerarPerfilPDF(projeto, perfil, { axis = 'cota', modo = 'interpo
 
   // legenda + carimbo
   legenda(doc, geo, M, PH - M - carH, 230, carH);
-  carimbo(doc, projeto, perfil, { Eh, Ev, exagero, data, x: PW - M - 170, y: PH - M - carH, w: 170, h: carH });
+  carimbo(doc, projeto, perfil, { Eh, Ev, exagero, data, modo, x: PW - M - 170, y: PH - M - carH, w: 170, h: carH });
   return doc;
 }
 
@@ -179,7 +179,9 @@ function legenda(doc, geo, x, y, w, h) {
   item((a, b) => { doc.setDrawColor(...VERMELHO); doc.setLineWidth(0.4); for (let k = 0; k < 3; k++) doc.line(a + 2, b + 0.8 + k, a + 6, b + 0.8 + k); }, 'Impenetrável');
 }
 
-function carimbo(doc, projeto, perfil, { Eh, Ev, exagero, data, x, y, w, h }) {
+const INTERPRETACAO = { interpolado: 'contatos interpolados entre furos', suave: 'contatos interpolados em curva', degrau: 'troca de material no meio do vão' };
+
+function carimbo(doc, projeto, perfil, { Eh, Ev, exagero, data, modo, x, y, w, h }) {
   const { bhs, corte } = perfil;
   doc.setDrawColor(...TINTA); doc.setLineWidth(0.3); doc.rect(x, y, w, h);
   const linha = (yy) => doc.line(x, yy, x + w, yy);
@@ -204,7 +206,7 @@ function carimbo(doc, projeto, perfil, { Eh, Ev, exagero, data, x, y, w, h }) {
     coord = `UTM ${fz}: A (${fmt(corte.p1[0], 0)}; ${fmt(corte.p1[1], 0)}) · A' (${fmt(corte.p2[0], 0)}; ${fmt(corte.p2[1], 0)})`;
     void utmParaGeo;
   }
-  campo('Interpretação', 'contatos interpolados entre furos', x + 3, y + 34, 7);
+  campo('Interpretação', INTERPRETACAO[modo] || INTERPRETACAO.interpolado, x + 3, y + 34, 7);
   campo('Data', data.toLocaleDateString('pt-BR'), x + w / 2 + 3, y + 34, 8);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(...CINZA);
   doc.text(coord, x + 3, y + 43.2);

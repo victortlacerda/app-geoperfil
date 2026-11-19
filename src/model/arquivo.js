@@ -20,6 +20,7 @@ export function carregarProjeto(dados) {
     lado: Math.sign(c.lado) || 1,
     faixa: c.faixa === null || c.faixa === undefined ? null : num(c.faixa, 50),
     incluir: c.incluir === 'ambos' ? 'ambos' : 'lado',
+    ...(['interpolado', 'suave', 'degrau'].includes(c.modo) && c.modo !== 'interpolado' ? { modo: c.modo } : {}),
     ...(c.ajustes && typeof c.ajustes === 'object' ? { ajustes: Object.fromEntries(Object.entries(c.ajustes).filter(([, v]) => Number.isFinite(v))) } : {}),
   }));
   return p;

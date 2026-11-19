@@ -221,7 +221,8 @@ function corteVertical(pts, d) {
 export function colunasDoCorte(corte, furos) {
   const bhs = perfilDoCorte(corte, furos);
   if (bhs.length < 2) return [];
-  const geo = geometriaPerfil(bhs, { ajustes: corte.ajustes || {} });
+  // o modo do corte (reta, suave ou degrau) vale também no 3D
+  const geo = geometriaPerfil(bhs, { ajustes: corte.ajustes || {}, modo: corte.modo || 'interpolado' });
   const [ax, ay] = corte.p1, [bx, by] = corte.p2, L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L;
   const t0 = (bhs[0].x - ax) * ux + (bhs[0].y - ay) * uy;
   // estações nos furos e a cada passo do vão. O passo não é menor que 1,5 m: no 2D

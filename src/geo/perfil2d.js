@@ -99,13 +99,18 @@ export function sequenciaDoVao(A, B, ajustes = {}) {
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-const linear = (it, t) => (1 - t) * (it.tipo === 'B' ? 0 : it.hA ?? it.h) + t * (it.tipo === 'A' ? 0 : it.hB ?? it.h);
+// S = forma da variação entre os furos: reta (t) ou suave (smoothstep, sem
+// ultrapassar os valores dos furos e com tangente horizontal neles)
+const RETA = (t) => t;
+export const SUAVE = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
-function propria(it, t, lado) {
-  if (it.tipo === 'M') return linear(it, t);
+const linear = (it, t, S = RETA) => (1 - S(t)) * (it.tipo === 'B' ? 0 : it.hA ?? it.h) + S(t) * (it.tipo === 'A' ? 0 : it.hB ?? it.h);
+
+function propria(it, t, lado, S = RETA) {
+  if (it.tipo === 'M') return linear(it, t, S);
   if (it.grupo) return 0; // calculada pelo grupo (transição lateral)
-  if (it.tipo === 'A') return t >= it.ponta ? 0 : it.h * (1 - t / it.ponta);
-  return t <= it.ponta ? 0 : it.h * ((t - it.ponta) / (1 - it.ponta));
+  if (it.tipo === 'A') return t >= it.ponta ? 0 : it.h * (1 - S(t / it.ponta));
+  return t <= it.ponta ? 0 : it.h * S((t - it.ponta) / (1 - it.ponta));
 }
 
 const faixaT = (item) => (item.tipo === 'M' ? [0, 1] : item.tipo === 'A' ? [0, item.ponta] : [item.ponta, 1]);
@@ -115,15 +120,15 @@ const faixaT = (item) => (item.tipo === 'M' ? [0, 1] : item.tipo === 'A' ? [0, i
  * ou à direita, nas transições laterais). As cunhas que deixam espaço (em relação à
  * interpolação linear) passam esse espaço às camadas casadas vizinhas, metade para cada.
  */
-function espessuras(seq, t, lado = '-') {
-  const h = seq.map((it) => propria(it, t, lado));
+function espessuras(seq, t, lado = '-', S = RETA) {
+  const h = seq.map((it) => propria(it, t, lado, S));
   let i = 0;
   while (i < seq.length) {
     if (seq[i].tipo === 'M') { i++; continue; }
     let j = i;
     while (j < seq.length && seq[j].tipo !== 'M') j++;
     let espaco = 0;
-    for (let k = i; k < j; k++) espaco += linear(seq[k], t);
+    for (let k = i; k < j; k++) espaco += linear(seq[k], t, S);
     const grupo = seq[i].grupo;
     if (grupo) {
       // transição lateral: as camadas de um lado dividem todo o espaço do trecho
@@ -135,7 +140,7 @@ function espessuras(seq, t, lado = '-') {
       }
     } else {
       let falta = 0;
-      for (let k = i; k < j; k++) falta += linear(seq[k], t) - h[k];
+      for (let k = i; k < j; k++) falta += linear(seq[k], t, S) - h[k];
       const cima = i - 1 >= 0 ? i - 1 : null, baixo = j < seq.length ? j : null;
       if (cima !== null && baixo !== null) { h[cima] += falta / 2; h[baixo] += falta / 2; }
       else if (cima !== null) h[cima] += falta;
@@ -147,25 +152,64 @@ function espessuras(seq, t, lado = '-') {
 }
 
 /** Cotas de topo e base de cada camada da sequência na posição t. */
-function empilhar(seq, cotaTopo, t, lado = '-') {
+function empilhar(seq, cotaTopo, t, lado = '-', S = RETA) {
   let c = cotaTopo;
-  return espessuras(seq, t, lado).map((h) => { const r = { topo: c, base: c - h }; c -= h; return r; });
+  return espessuras(seq, t, lado, S).map((h) => { const r = { topo: c, base: c - h }; c -= h; return r; });
+}
+
+/**
+ * Interpolação cúbica monotônica (Fritsch–Carlson) pelos pontos [[x, y]]: passa
+ * por eles, é suave e não ultrapassa os valores entre dois pontos vizinhos.
+ */
+export function pchip(pts) {
+  const n = pts.length, x = pts.map((p) => p[0]), y = pts.map((p) => p[1]);
+  if (n === 1) return () => y[0];
+  const h = [], dl = [];
+  for (let i = 0; i < n - 1; i++) { h.push(x[i + 1] - x[i] || 1e-9); dl.push((y[i + 1] - y[i]) / h[i]); }
+  const m = new Array(n).fill(0);
+  m[0] = dl[0]; m[n - 1] = dl[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (dl[i - 1] * dl[i] <= 0) m[i] = 0;
+    else { const w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1]; m[i] = (w1 + w2) / (w1 / dl[i - 1] + w2 / dl[i]); }
+  }
+  if (n === 2) { m[0] = m[1] = dl[0]; }
+  return (xv) => {
+    if (xv <= x[0]) return y[0];
+    if (xv >= x[n - 1]) return y[n - 1];
+    let i = 0;
+    while (i < n - 2 && xv > x[i + 1]) i++;
+    const t = (xv - x[i]) / h[i], t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * y[i] + (t3 - 2 * t2 + t) * h[i] * m[i] + (-2 * t3 + 3 * t2) * y[i + 1] + (t3 - t2) * h[i] * m[i + 1];
+  };
 }
 
 /**
  * Geometria completa do perfil.
  * @param bhs furos do corte (perfilDoCorte), ordenados por distância
- * @param opcoes { ajustes, modo: 'interpolado' | 'degrau' }
+ * @param opcoes { ajustes, modo: 'interpolado' | 'suave' | 'degrau' }
+ *   suave: terreno e NA em curva pelos furos (sem ultrapassar os valores), espessuras
+ *   variando de forma suave e cunhas com ponta arredondada; o resto como no interpolado
  * @returns { poligonos, pontas, terreno, na, fundo, ext, totDist }
  *   poligonos: [{ solo, sec, pts: [[dist, cota]], rotulo: { d, c, h } }]
  *   pontas: [{ chave, d, c, padrao, ponta, vao }] — alças de acunhamento editáveis
  */
 export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}) {
   const poligonos = [], pontas = [];
+  const suave = modo === 'suave', S = suave ? SUAVE : RETA;
+  const fTer = suave ? pchip(bhs.map((b) => [b.dist, b.cota])) : null;
+  const AMOSTRAS = 24, grade = Array.from({ length: AMOSTRAS + 1 }, (_, k) => k / AMOSTRAS);
+  const linhas = { terreno: [], fundo: [] };
+  const prof = (b) => (b.layers.length ? Math.max(...b.layers.map((l) => l.ate)) : 0);
   for (let i = 0; i < bhs.length - 1; i++) {
     const A = bhs[i], B = bhs[i + 1];
     if (!A.layers.length || !B.layers.length) continue;
-    const dA = A.dist, dB = B.dist, D = (t) => dA + t * (dB - dA), topo = (t) => (1 - t) * A.cota + t * B.cota;
+    const dA = A.dist, dB = B.dist, D = (t) => dA + t * (dB - dA);
+    const topo = suave ? (t) => fTer(D(t)) : (t) => (1 - t) * A.cota + t * B.cota;
+    if (suave) grade.forEach((t) => {
+      if (i > 0 && t === 0) return;
+      linhas.terreno.push([D(t), topo(t)]);
+      linhas.fundo.push([D(t), topo(t) - ((1 - S(t)) * prof(A) + S(t) * prof(B))]);
+    });
     if (modo === 'degrau') {
       const xm = (dA + dB) / 2;
       buildZones(A, B).forEach((z) => {
@@ -176,8 +220,8 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
       continue;
     }
     const seq = sequenciaDoVao(A, B, ajustes);
-    const ts = [...new Set([0, 0.5, 1, ...seq.filter((s) => s.tipo !== 'M').map((s) => s.ponta)])].sort((a, b) => a - b);
-    const pilha = (t, lado) => empilhar(seq, topo(t), t, lado);
+    const ts = [...new Set([0, 0.5, 1, ...(suave ? grade : []), ...seq.filter((s) => s.tipo !== 'M').map((s) => s.ponta)])].sort((a, b) => a - b);
+    const pilha = (t, lado) => empilhar(seq, topo(t), t, lado, S);
     const cache = new Map(ts.flatMap((t) => [[`${t}-`, pilha(t, '-')], [`${t}+`, pilha(t, '+')]]));
     seq.forEach((it, k) => {
       const [t0, t1] = faixaT(it);
@@ -202,9 +246,16 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
       pontas.push({ chave: g.chave, d: D(g.ponta), c, ponta: g.ponta, padrao: g.padrao, tipo: 'T', vao: [dA, dB], codigo: 'transição' });
     });
   }
-  const terreno = bhs.map((b) => [b.dist, b.cota]);
-  const na = bhs.filter((b) => b.na > 0).map((b) => [b.dist, b.cota - b.na]);
-  const fundo = bhs.map((b) => [b.dist, b.cota - (b.layers.length ? Math.max(...b.layers.map((l) => l.ate)) : 0)]);
+  let terreno = bhs.map((b) => [b.dist, b.cota]);
+  let na = bhs.filter((b) => b.na > 0).map((b) => [b.dist, b.cota - b.na]);
+  let fundo = bhs.map((b) => [b.dist, b.cota - prof(b)]);
+  if (suave && linhas.terreno.length) {
+    terreno = linhas.terreno; fundo = linhas.fundo;
+    if (na.length > 1) {
+      const fNA = pchip(na), d0 = na[0][0], d1 = na.at(-1)[0];
+      na = Array.from({ length: AMOSTRAS * (na.length - 1) + 1 }, (_, k) => { const d = d0 + ((d1 - d0) * k) / (AMOSTRAS * (na.length - 1)); return [d, Math.min(fNA(d), fTer(d))]; });
+    }
+  }
   const totDist = bhs.length ? Math.max(...bhs.map((b) => b.dist)) : 0;
   return { poligonos, pontas, terreno, na, fundo, ext: extensaoCotas(bhs), totDist };
 }

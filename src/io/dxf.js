@@ -71,7 +71,7 @@ export function gerarDXF(projeto, perfil, axis = 'cota') {
 
   // ── PERFIL ──
   if (temPerfil) {
-    const geo = perfil.geo || geometriaPerfil(bhs, { ajustes: corte?.ajustes || {} });
+    const geo = perfil.geo || geometriaPerfil(bhs, { ajustes: corte?.ajustes || {}, modo: corte?.modo || 'interpolado' });
     const { Eh, Ev, exagero, passoC, cTopo, cBase } = escalasPerfil(geo, bhs);
     const u = Eh / 1000, kv = Eh / Ev, mm = (v) => v * u, mmV = 1000 / Ev; // mm de papel por metro de cota
     const X = (d) => d, Y = (c) => (c - cBase) * kv;

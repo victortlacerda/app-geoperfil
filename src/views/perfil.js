@@ -1,5 +1,6 @@
 // Perfil 2D ao longo do corte ativo, desenhado a partir da geometria de geo/perfil2d.js
-// (contatos interpolados com acunhamento, ou troca no meio do vão no modo "degrau").
+// (contatos interpolados com acunhamento, em reta ou em curva no modo "suave", ou
+// troca no meio do vão no modo "degrau"). O modo fica salvo em cada corte.
 import { niceStep, extensaoCotas } from '../geo/zonas.js';
 import { geometriaPerfil } from '../geo/perfil2d.js';
 import { perfilDoCorte } from '../geo/corte.js';
@@ -87,7 +88,7 @@ export function criarPerfil(app) {
     ext = extensaoCotas(bhs);
     const ajustes = { ...(corte?.ajustes || {}) };
     if (arrasteP) ajustes[arrasteP.chave] = arrasteP.t;
-    geo = geometriaPerfil(bhs, { ajustes, modo: o.modo });
+    geo = geometriaPerfil(bhs, { ajustes, modo: corte?.modo || 'interpolado' });
     clampPan();
   }
 
@@ -158,12 +159,13 @@ export function criarPerfil(app) {
     });
     // terreno
     ctx.strokeStyle = '#1a1a0a'; ctx.lineWidth = 2.5; ctx.beginPath();
-    bhs.forEach((b, i) => (i ? ctx.lineTo(pwx(b.dist), pwy(b.cota)) : ctx.moveTo(pwx(b.dist), pwy(b.cota)))); ctx.stroke();
+    geo.terreno.forEach(([d, c], i) => (i ? ctx.lineTo(pwx(d), pwy(c)) : ctx.moveTo(pwx(d), pwy(c)))); ctx.stroke();
     // NA
     if (o.showNA) {
       ctx.save(); ctx.strokeStyle = NA_COR; ctx.lineWidth = 1.5; ctx.setLineDash([6, 3]); ctx.globalAlpha = 0.75; ctx.beginPath();
-      bhs.forEach((b, i) => (i ? ctx.lineTo(pwx(b.dist), pwy(b.cota - b.na)) : ctx.moveTo(pwx(b.dist), pwy(b.cota - b.na)))); ctx.stroke(); ctx.restore();
-      bhs.forEach((b) => {
+      // linha da geometria (em curva no modo suave), só entre furos com NA medido
+      geo.na.forEach(([d, c], i) => (i ? ctx.lineTo(pwx(d), pwy(c)) : ctx.moveTo(pwx(d), pwy(c)))); ctx.stroke(); ctx.restore();
+      bhs.filter((b) => b.na > 0).forEach((b) => {
         const x = pwx(b.dist), y = pwy(b.cota - b.na);
         ctx.save(); ctx.strokeStyle = NA_COR; ctx.lineWidth = 1.5;
         [-4, 0, 4].forEach((dy, k) => { const hw = 7 - k * 2; ctx.beginPath(); ctx.moveTo(x - hw, y + dy); ctx.lineTo(x + hw, y + dy); ctx.stroke(); });
@@ -184,7 +186,7 @@ export function criarPerfil(app) {
       ctx.fillText('d=' + b.dist.toFixed(0) + 'm', x, PMT + ppH() + 26);
       ctx.restore();
     });
-    if (o.editar && o.modo !== 'degrau') geo.pontas.forEach((pt) => {
+    if (o.editar && app.corteAtivo()?.modo !== 'degrau') geo.pontas.forEach((pt) => {
       const x = pwx(pt.d), y = pwy(pt.c), mexida = Math.abs(pt.ponta - pt.padrao) > 1e-6, ativa = arrasteP?.chave === pt.chave;
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4);
       ctx.fillStyle = ativa || mexida ? ACCENT : '#fff'; ctx.strokeStyle = ACCENT; ctx.lineWidth = 1.5;
@@ -238,7 +240,7 @@ export function criarPerfil(app) {
   let tDrag = null, cDrag = null;
   thumb.addEventListener('mousedown', (e) => { tDrag = { x: e.clientX, p: o.panX }; thumb.classList.add('dragging'); e.preventDefault(); });
   function pontaEm(cx, cy) {
-    if (!o.editar || o.modo === 'degrau' || !geo) return null;
+    if (!o.editar || app.corteAtivo()?.modo === 'degrau' || !geo) return null;
     return geo.pontas.find((pt) => Math.hypot(pwx(pt.d) - cx, pwy(pt.c) - cy) <= 9) || null;
   }
   const xyCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };

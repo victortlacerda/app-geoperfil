@@ -34,7 +34,7 @@ const ui = {
   graficoOculto: new Set(), tool: 'furo', faixa: 50, incluir: 'lado',
   planta: { k: 2, cx: 0, cy: 0 },
   m3d: M3D_PADRAO(),
-  perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0, modo: 'interpolado', editar: false },
+  perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0, editar: false },
 };
 
 const app = {
@@ -95,7 +95,7 @@ function render() {
   });
   if (ui.view === 'planta') planta.draw();
   if (ui.view === 'camadas') camadas.render();
-  if (ui.view === 'perfil') perfil.draw();
+  if (ui.view === 'perfil') { botoesModo(); perfil.draw(); }
   if (ui.view === '3d') abrir3D();
   else modelo3d?.render();
 }
@@ -119,6 +119,15 @@ document.querySelectorAll('[data-m3d]').forEach((el) => el.addEventListener('cha
   if (el.dataset.m3d === 'cortar') modelo3d?.reenquadrar();
   modelo3d?.render();
 }));
+/** Botões Interpolado / Suave / Degrau refletem o modo do corte ativo. */
+function botoesModo() {
+  const m = app.corteAtivo()?.modo || 'interpolado';
+  $('btn-interp').classList.toggle('active', m === 'interpolado');
+  $('btn-suave').classList.toggle('active', m === 'suave');
+  $('btn-degrau').classList.toggle('active', m === 'degrau');
+  $('btn-editar').disabled = m === 'degrau'; $('btn-restaurar').disabled = m === 'degrau';
+}
+
 /** Controles da barra do 3D refletem ui.m3d. */
 function sincronizar3D() {
   document.querySelectorAll('[data-m3d]').forEach((el) => { el.checked = !!ui.m3d[el.dataset.m3d]; });
@@ -345,7 +354,7 @@ const acoes = {
     if (d.bhs.length < 2) { toast(`O corte ${corte.nome} precisa de pelo menos 2 furos.`); return; }
     try {
       const { gerarPerfilPDF } = await import('./io/perfilPDF.js');
-      const pdf = gerarPerfilPDF(store.doc, { ...d, corte }, { axis: ui.perfil.axis, modo: ui.perfil.modo });
+      const pdf = gerarPerfilPDF(store.doc, { ...d, corte }, { axis: ui.perfil.axis });
       baixar(pdf.output('blob'), nomeArquivo(`perfil_${store.doc.projeto.nome}_${corte.nome}`, 'pdf'), 'application/pdf');
     } catch (e) { toast('Erro ao gerar o PDF: ' + e.message, 6000); }
   },
@@ -361,11 +370,12 @@ const acoes = {
     const blob = await modelo3d.capturar();
     baixar(blob, nomeArquivo(`modelo3d_${store.doc.projeto.nome}`, 'png'), 'image/png');
   },
+  // o modo do desenho fica salvo no corte (vale no 2D, no PDF, no DXF e no 3D)
   modoPerfil(m) {
-    ui.perfil.modo = m;
-    $('btn-interp').classList.toggle('active', m === 'interpolado'); $('btn-degrau').classList.toggle('active', m === 'degrau');
-    $('btn-editar').disabled = m === 'degrau'; $('btn-restaurar').disabled = m === 'degrau';
-    perfil.draw();
+    const c = app.corteAtivo();
+    if (!c) return;
+    if ((c.modo || 'interpolado') !== m) store.commit((d) => { const q = d.cortes.find((x) => x.id === c.id); if (m === 'interpolado') delete q.modo; else q.modo = m; });
+    botoesModo();
   },
   editarContatos() {
     ui.perfil.editar = !ui.perfil.editar;
@@ -383,8 +393,8 @@ const acoes = {
   editarNo2D() {
     if (!app.corteAtivo()) { toast('Trace um corte na planta para ajustar os contatos.'); return; }
     ui.view = 'perfil';
+    if (app.corteAtivo().modo === 'degrau') acoes.modoPerfil('interpolado');
     if (!ui.perfil.editar) acoes.editarContatos();
-    if (ui.perfil.modo !== 'interpolado') acoes.modoPerfil('interpolado');
     render();
   },
   restaurarContatos() {

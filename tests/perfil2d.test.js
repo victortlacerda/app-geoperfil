@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { correlacionar, sequenciaDoVao, geometriaPerfil, camadasContinuas } from '../src/geo/perfil2d.js';
 import { solo } from '../src/model/catalogo.js';
+import { projetoExemplo } from '../src/model/projeto.js';
+import { perfilDoCorte } from '../src/geo/corte.js';
 
 const furo = (id, dist, cota, camadas, na = 0) => ({
   id, name: id, dist, cota, na,
@@ -110,5 +112,40 @@ describe('geometria interpolada', () => {
   it('terreno e NA ligam os furos', () => {
     expect(g.terreno).toEqual([[0, 100], [40, 96]]);
     expect(g.na).toEqual([[0, 97], [40, 94]]);
+  });
+});
+
+describe('modo suave', () => {
+  const p = projetoExemplo();
+  const corte = { id: 'c1', p1: [333020, 7393985], p2: [333220, 7394005], lado: 1, faixa: 40, incluir: 'ambos' };
+  const bhs = perfilDoCorte(corte, p.furos);
+  const reta = geometriaPerfil(bhs, {}), suave = geometriaPerfil(bhs, { modo: 'suave' });
+  const cotaEm = (linha, d) => { for (let i = 1; i < linha.length; i++) { const [a, ca] = linha[i - 1], [b, cb] = linha[i]; if (d <= b + 1e-9) return b - a < 1e-12 ? cb : ca + ((cb - ca) * (d - a)) / (b - a); } return linha.at(-1)[1]; };
+
+  it('mesmas camadas e alças que o interpolado', () => {
+    expect(suave.poligonos.map((q) => q.solo.code)).toEqual(reta.poligonos.map((q) => q.solo.code));
+    expect(suave.pontas.map((q) => q.chave)).toEqual(reta.pontas.map((q) => q.chave));
+  });
+
+  it('terreno em curva passa pelos furos e não ultrapassa os valores vizinhos', () => {
+    expect(suave.terreno.length).toBeGreaterThan(reta.terreno.length * 5);
+    bhs.forEach((b) => expect(cotaEm(suave.terreno, b.dist)).toBeCloseTo(b.cota, 6));
+    for (let i = 0; i < bhs.length - 1; i++) {
+      const lo = Math.min(bhs[i].cota, bhs[i + 1].cota), hi = Math.max(bhs[i].cota, bhs[i + 1].cota);
+      suave.terreno.filter(([d]) => d >= bhs[i].dist && d <= bhs[i + 1].dist).forEach(([, c]) => { expect(c).toBeGreaterThanOrEqual(lo - 1e-9); expect(c).toBeLessThanOrEqual(hi + 1e-9); });
+    }
+  });
+
+  it('nos furos os contatos são os mesmos do interpolado (os do boletim)', () => {
+    const contatos = (g, d) => g.poligonos.flatMap((q) => q.pts.filter(([x]) => Math.abs(x - d) < 1e-9).map(([, c]) => +c.toFixed(6))).sort();
+    bhs.forEach((b) => expect([...new Set(contatos(suave, b.dist))]).toEqual([...new Set(contatos(reta, b.dist))]));
+  });
+
+  it('a espessura total se conserva: a base das camadas é o fundo', () => {
+    suave.fundo.forEach(([d, c]) => {
+      if (bhs.some((b) => Math.abs(b.dist - d) < 1e-9)) return;
+      const bases = suave.poligonos.flatMap((q) => q.pts.filter(([x]) => Math.abs(x - d) < 1e-9).map(([, y]) => y));
+      if (bases.length) expect(Math.min(...bases)).toBeCloseTo(c, 4);
+    });
   });
 });
