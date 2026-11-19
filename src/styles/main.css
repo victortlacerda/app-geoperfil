@@ -189,6 +189,15 @@ button,input,select{font-family:var(--f)}
 .cor-item{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:4px}
 .cor-item input[type=color]{width:26px;height:20px;padding:1px;border:.5px solid var(--br);border-radius:3px;background:none}
 
+/* ── modelo 3D ── */
+.cena3d{flex:1;position:relative;overflow:hidden;background:#f3f4f6}
+.cena3d canvas{display:block}
+.leg3d{pointer-events:auto;top:10px;bottom:auto}
+.leg3d-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:10px;color:var(--tx2)}
+.leg3d-row input[type=range]{width:70px}
+.leg3d-nome{width:34px}
+#m3dEx{width:90px}#m3dDesl{width:110px}
+
 /* ── planta com mapa ── */
 .toolbar-2{border-top:none;padding-top:4px;padding-bottom:6px}
 .toolbar .grupo{display:flex;align-items:center;gap:5px}

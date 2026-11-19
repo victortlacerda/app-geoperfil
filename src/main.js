@@ -31,6 +31,7 @@ const ui = {
   view: 'planta', furoId: null, corteId: null, metroSel: null, rp: 'chart', linhasMin: {},
   graficoOculto: new Set(), tool: 'furo', faixa: 50, incluir: 'lado',
   planta: { k: 2, cx: 0, cy: 0 },
+  m3d: { exagero: 3, furos: true, cercas: true, secao: true, terreno: true, na: true, fundo: false, spt: false, cortar: false, deslocamento: 0, ocultos: new Set(), opacidade: {} },
   perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0, modo: 'interpolado', editar: false },
 };
 
@@ -86,16 +87,37 @@ function render() {
   validarSelecao();
   renderSidebar();
   if (document.activeElement !== $('faixaInput')) sincronizarFaixa();
-  ['planta', 'camadas', 'perfil'].forEach((n) => {
+  ['planta', 'camadas', 'perfil', '3d'].forEach((n) => {
     $('view-' + n).hidden = n !== ui.view;
     $('nav-' + n).classList.toggle('active', n === ui.view);
   });
   if (ui.view === 'planta') planta.draw();
   if (ui.view === 'camadas') camadas.render();
   if (ui.view === 'perfil') perfil.draw();
+  if (ui.view === '3d') abrir3D();
+  else modelo3d?.render();
 }
 
 store.assinar(() => render());
+
+// ── modelo 3D (carregado sob demanda) ────────────────────
+let modelo3d = null, carregando3d = null;
+function abrir3D() {
+  if (modelo3d) { modelo3d.render(); return; }
+  if (carregando3d) return;
+  $('m3dInfo').textContent = 'Carregando o modelo 3D…';
+  carregando3d = import('./views/modelo3d.js').then(({ criarModelo3D }) => {
+    modelo3d = criarModelo3D(app);
+    window.geoperfil.modelo3d = modelo3d;
+    modelo3d.render();
+  }).catch((e) => { $('m3dInfo').textContent = 'Erro ao carregar o modelo 3D: ' + e.message; carregando3d = null; });
+}
+document.querySelectorAll('[data-m3d]').forEach((el) => el.addEventListener('change', () => {
+  ui.m3d[el.dataset.m3d] = el.checked;
+  modelo3d?.render();
+}));
+$('m3dEx').addEventListener('input', () => { const v = +$('m3dEx').value; $('m3dExVal').textContent = `${v}×`; modelo3d?.definirExagero(v); });
+$('m3dDesl').addEventListener('input', () => { ui.m3d.deslocamento = +$('m3dDesl').value; $('m3dDeslVal').textContent = `${ui.m3d.deslocamento} m`; modelo3d?.render(); });
 
 // ── faixa do corte ───────────────────────────────────────
 function sincronizarFaixa() {
@@ -317,6 +339,12 @@ const acoes = {
       const pdf = gerarPerfilPDF(store.doc, { ...d, corte }, { axis: ui.perfil.axis, modo: ui.perfil.modo });
       baixar(pdf.output('blob'), nomeArquivo(`perfil_${store.doc.projeto.nome}_${corte.nome}`, 'pdf'), 'application/pdf');
     } catch (e) { toast('Erro ao gerar o PDF: ' + e.message, 6000); }
+  },
+  vista3d(t) { modelo3d?.vista(t); },
+  async capturar3d() {
+    if (!modelo3d) return;
+    const blob = await modelo3d.capturar();
+    baixar(blob, nomeArquivo(`modelo3d_${store.doc.projeto.nome}`, 'png'), 'image/png');
   },
   modoPerfil(m) {
     ui.perfil.modo = m;
