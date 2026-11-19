@@ -5,7 +5,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { modeloBloco, linhaNoDominio } from '../geo/bloco3d.js';
-import { furosNoCorte } from '../geo/corte.js';
 import { niceStep } from '../geo/zonas.js';
 import { camadasDoFuro, sptPorMetro, sptTextos, profMax } from '../model/projeto.js';
 import { solo, secLabel } from '../model/catalogo.js';
@@ -66,7 +65,7 @@ export function criarModelo3D(app) {
   const plano = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
   const materiais = new Map();
   let ref = { cx: 0, cy: 0, c0: 0, diag: 100 };
-  let modelo = null, corteInfo = null;
+  let modelo = null, docModelo = null, corteInfo = null;
   let precisaEnquadrar = true;
   let ativo = false, animando = false;
 
@@ -204,13 +203,22 @@ export function criarModelo3D(app) {
   }
 
   // ── face do corte ──
-  function construirFace(m, seg) {
+  function construirFace(m, seg, corteId) {
     const [[xa, ya], [xb, yb]] = seg, L = Math.hypot(xb - xa, yb - ya);
     const n = Math.max(2, Math.round(L / (Math.max(m.dominio.x1 - m.dominio.x0, m.dominio.y1 - m.dominio.y0) / 240)));
-    const am = Array.from({ length: n + 1 }, (_, i) => { const t = i / n, x = xa + (xb - xa) * t, y = ya + (yb - ya) * t; return { x, y, ...m.naMalha(x, y) }; });
+    const ts = Array.from({ length: n + 1 }, (_, i) => i / n);
+    // na linha do próprio corte: também nas colunas do perfil 2D, avaliado de forma
+    // exata, para a face ser o perfil 2D (pontas de acunhamento, transições)
+    if (corteId) m.colunas.filter((q) => q.corte === corteId).forEach((q) => ts.push(((q.x - xa) * (xb - xa) + (q.y - ya) * (yb - ya)) / (L * L)));
+    ts.sort((a, b) => a - b);
+    const am = ts.filter((t, i) => t >= 0 && t <= 1 && (i === 0 || t - ts[i - 1] > 1e-6)).map((t) => {
+      const x = xa + (xb - xa) * t, y = ya + (yb - ya) * t;
+      return { x, y, ...(corteId ? m.pontual(x, y) : m.naMalha(x, y)) };
+    });
+    const nA = am.length - 1;
     m.unidades.forEach((u, q) => {
       const pos = [];
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < nA; i++) {
         const a = am[i], b = am[i + 1];
         if (a.contatos[q] - a.contatos[q + 1] <= 1e-3 && b.contatos[q] - b.contatos[q + 1] <= 1e-3) continue;
         const A1 = P(a.x, a.y, a.contatos[q]), A2 = P(a.x, a.y, a.contatos[q + 1]), B1 = P(b.x, b.y, b.contatos[q]), B2 = P(b.x, b.y, b.contatos[q + 1]);
@@ -249,17 +257,9 @@ export function criarModelo3D(app) {
   function construir() {
     limpar(raiz); limpar(rotulos);
     const doc = app.store.doc, corte = app.corteAtivo();
-    // com o bloco cortado, os furos do corte também valem na posição projetada na
-    // linha do corte (como no Perfil 2D): a face do corte passa pelos dados deles
-    const extras = [];
-    if (corte && o.cortar) {
-      const [ax, ay] = corte.p1, [bx, by] = corte.p2, Lc = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / Lc, uy = (by - ay) / Lc;
-      furosNoCorte(corte, doc.furos).forEach((f) => {
-        const t = (f.x - ax) * ux + (f.y - ay) * uy;
-        extras.push({ id: f.id, x: ax + ux * t, y: ay + uy * t });
-      });
-    }
-    modelo = modeloBloco(doc.furos, { extras });
+    // o modelo usa os furos e o Perfil 2D de cada corte (com os contatos ajustados);
+    // só é recalculado quando os dados mudam
+    if (doc !== docModelo) { modelo = modeloBloco(doc.furos, { cortes: doc.cortes }); docModelo = doc; }
     const info = document.getElementById('m3dInfo');
     if (!modelo) { corteInfo = null; info.textContent = 'Lance furos com camadas para ver o modelo.'; renderLegenda(); return; }
     const dom = modelo.dominio, nU = modelo.unidades.length;
@@ -294,12 +294,12 @@ export function criarModelo3D(app) {
     if (corteInfo) {
       const { corte: c, seg, nrm, u, d } = corteInfo;
       if (cortando()) {
-        construirFace(modelo, seg);
-        // no plano do corte: os furos do corte projetados (o modelo passa por eles ali);
-        // com o plano deslocado, só os furos que estão praticamente sobre ele
-        const ids = new Set(modelo.pontos.filter((pt) => pt.extra).map((pt) => pt.f.id));
+        construirFace(modelo, seg, d === 0 ? c.id : null);
+        // no plano do corte: os furos do corte na posição projetada, como no Perfil 2D
+        // (o modelo passa pelo perfil ali); com o plano deslocado, só os furos sobre ele
         const tol = Math.max(1, ref.diag * 0.01);
-        const projetar = d === 0 ? modelo.furos.filter((f) => ids.has(f.id) || (furosNoCorte(c, modelo.furos).includes(f) && Math.abs(dist(f)) <= tol)) : modelo.furos.filter((f) => Math.abs(dist(f)) <= tol);
+        const noPerfil = new Set(modelo.colunas.filter((q) => q.corte === c.id && q.furo).map((q) => q.furo));
+        const projetar = d === 0 ? modelo.furos.filter((f) => noPerfil.has(f.id)) : modelo.furos.filter((f) => Math.abs(dist(f)) <= tol);
         if (o.furos) projetar.forEach((f) => {
           const t = (f.x - seg[0][0]) * u[0] + (f.y - seg[0][1]) * u[1];
           const x = seg[0][0] + u[0] * t - nrm[0] * raio * 1.1, y = seg[0][1] + u[1] * t - nrm[1] * raio * 1.1;
@@ -338,7 +338,8 @@ export function criarModelo3D(app) {
     const W = dom.x1 - dom.x0, D = dom.y1 - dom.y0;
     info.textContent = `${modelo.furos.length} furo(s) · bloco ${fmt(W, 0)} × ${fmt(D, 0)} m · ${nU} camada(s) correlacionada(s)` +
       (corte ? (corteInfo ? ` · corte ${corte.nome}` : ` · corte ${corte.nome} fora do bloco`) : '');
-    if (precisaEnquadrar) { precisaEnquadrar = false; ajustar(); }
+    if (o.vistaPendente) { const v = o.vistaPendente; o.vistaPendente = null; precisaEnquadrar = false; vista(v); }
+    else if (precisaEnquadrar) { precisaEnquadrar = false; ajustar(); }
   }
 
   /** Régua de cotas num canto, coordenadas nos cantos e seta do norte. */

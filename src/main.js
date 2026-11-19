@@ -373,6 +373,20 @@ const acoes = {
     if (ui.perfil.editar) toast('Arraste as alças ◆ para mudar onde cada camada acunha ou a posição das transições. Duplo clique volta ao padrão.', 6000);
     perfil.draw();
   },
+  // atalhos entre o Perfil 2D e o Modelo 3D (os dois usam o mesmo perfil do corte)
+  ver3d() {
+    if (!app.corteAtivo()) { toast('Selecione ou trace um corte.'); return; }
+    ui.m3d.cortar = true; ui.m3d.deslocamento = 0; ui.m3d.vistaPendente = 'corte';
+    sincronizar3D();
+    ui.view = '3d'; render();
+  },
+  editarNo2D() {
+    if (!app.corteAtivo()) { toast('Trace um corte na planta para ajustar os contatos.'); return; }
+    ui.view = 'perfil';
+    if (!ui.perfil.editar) acoes.editarContatos();
+    if (ui.perfil.modo !== 'interpolado') acoes.modoPerfil('interpolado');
+    render();
+  },
   restaurarContatos() {
     const c = app.corteAtivo();
     if (!c || !c.ajustes || !Object.keys(c.ajustes).length) { toast('Este corte já está na interpretação automática.'); return; }

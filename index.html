@@ -191,6 +191,7 @@
         <input type="range" id="m3dDesl" min="-100" max="100" step="1" value="0" title="Desloca o plano de corte (m)" />
         <span class="tlbl" id="m3dDeslVal">0 m</span>
         <div class="push grupo">
+          <button class="t-btn" data-action="editarNo2D" title="Abre o Perfil 2D do corte ativo para ajustar os contatos; o 3D acompanha">✎ Ajustar contatos no 2D</button>
           <button class="t-btn" data-action="redefinir3d" title="Volta exagero, opções, plano de corte, camadas e câmera ao padrão">Redefinir</button>
           <button class="t-btn" data-action="vista3d" data-arg="livre">Ajustar</button>
           <button class="t-btn" data-action="vista3d" data-arg="cima">De cima</button>
@@ -227,7 +228,7 @@
         <button class="t-btn" data-action="zoom" data-arg="-0.25">−</button>
         <button class="t-btn" data-action="zoom" data-arg="0.25">+</button>
         <button class="t-btn" data-action="zoomFit">Fit</button>
-        <div class="push"><button class="t-btn" data-action="pdf">PDF do perfil (A3)</button></div>
+        <div class="push"><button class="t-btn" data-action="ver3d" title="Abre o modelo 3D cortado neste alinhamento: o 3D usa este perfil, inclusive os contatos ajustados">Ver no 3D</button><button class="t-btn" data-action="pdf">PDF do perfil (A3)</button></div>
       </div>
       <div class="canvas-area" id="canvasArea">
         <canvas id="profileCanvas"></canvas>

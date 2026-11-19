@@ -45,7 +45,7 @@ Camadas de mesma classificação são correlacionadas entre furos vizinhos e lig
 
 ## Modelo 3D do terreno
 
-Um bloco geológico sólido montado a partir dos furos. A cota do terreno, a espessura de cada camada e o NA são interpolados com uma superfície suave que passa exatamente pelos valores de cada sondagem. O bloco abre no alinhamento do corte ativo e mostra os furos e o N-SPT na face.
+Um bloco geológico sólido montado a partir dos furos **e dos perfis 2D**. Ao longo de cada corte, o 3D reproduz o Perfil 2D, inclusive os contatos ajustados à mão: arrastou uma transição no 2D, o 3D acompanha. Entre os cortes, a cota do terreno, a espessura de cada camada e o NA são interpolados a partir das sondagens. O bloco abre no alinhamento do corte ativo e mostra os furos e o N-SPT na face. Os botões **Ver no 3D** (no Perfil 2D) e **Ajustar contatos no 2D** (no 3D) levam de uma aba à outra.
 
 | Bloco inteiro | Face do corte A–A' |
 |---|---|
@@ -130,5 +130,5 @@ Tudo em metros. `x` = Leste e `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` qua
 - [x] Fase 2 — Boletim metro a metro e boletim em PDF
 - [x] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000, GeoJSON/KML)
 - [x] Fase 4 — Perfil 2D v2 (contatos interpolados, ajuste manual, PDF A3 com carimbo, DXF)
-- [x] Fase 5 — Modelo 3D com three.js (bloco geológico interpolado, corte no alinhamento do corte ativo)
+- [x] Fase 5 — Modelo 3D com three.js (bloco geológico interpolado, ligado ao Perfil 2D, corte no alinhamento do corte ativo)
 - [ ] Fase 6 — Classificação SUCS e integração com os apps de fundações

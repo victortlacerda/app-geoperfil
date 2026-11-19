@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { interpolador, colunaEstratigrafica, modeloBloco, dominio, linhaNoDominio } from '../src/geo/bloco3d.js';
+import { interpolador, colunaEstratigrafica, modeloBloco, dominio, linhaNoDominio, colunasDoCorte, colunaDoFuro } from '../src/geo/bloco3d.js';
+import { perfilDoCorte } from '../src/geo/corte.js';
+import { geometriaPerfil } from '../src/geo/perfil2d.js';
 import { projetoExemplo, novoFuro, camadasDoFuro } from '../src/model/projeto.js';
 
 const furo = (nome, x, y, cota, camadas, na = 0) =>
@@ -77,15 +79,7 @@ describe('modelo em bloco', () => {
     });
   });
 
-  it('furo repetido em outra posição (projetado no corte): o modelo honra os dois pontos', () => {
-    const f = p.furos[0];
-    const mx = modeloBloco(p.furos, { extras: [{ id: f.id, x: f.x + 12, y: f.y - 20 }] });
-    const a = mx.pontual(f.x, f.y).contatos, b = mx.pontual(f.x + 12, f.y - 20).contatos;
-    a.forEach((c, i) => expect(b[i] - (f.cota - a[0]) * 0).toBeCloseTo(c, 4));
-    // cópia colada em outro furo é ignorada
-    const g = p.furos[1];
-    expect(modeloBloco(p.furos, { extras: [{ id: f.id, x: g.x + 0.2, y: g.y }] }).pontos.length).toBe(p.furos.length);
-  });
+  it('sem corte gera só a planta', () => expect(m.colunas.every((c) => c.real)).toBe(true));
 
   it('camadas empilhadas nunca se cruzam e o NA não passa do terreno', () => {
     const N = (m.nx + 1) * (m.ny + 1);
@@ -109,4 +103,45 @@ describe('linha do corte no domínio', () => {
     expect(a).toEqual([0, 0]); expect(b).toEqual([50, 50]);
   });
   it('fora do retângulo: null', () => expect(linhaNoDominio([0, 80], [10, 80], dom)).toBe(null));
+});
+
+describe('2D e 3D ligados: o perfil de cada corte entra no modelo', () => {
+  const p = projetoExemplo();
+  const corte = { id: 'c1', nome: "A–A'", p1: [333020, 7393985], p2: [333220, 7394005], lado: 1, faixa: 40, incluir: 'ambos', ajustes: {} };
+  const bhs = perfilDoCorte(corte, p.furos);
+  const virt = colunasDoCorte(corte, p.furos);
+
+  it('colunas virtuais ao longo do corte, inclusive na posição projetada de cada furo', () => {
+    expect(virt.length).toBeGreaterThan(30);
+    bhs.forEach((b) => expect(virt.some((v) => v.furo === b.id)).toBe(true));
+    // na posição do furo, a coluna virtual tem as camadas do furo
+    const v = virt.find((q) => q.furo === bhs[0].id);
+    expect(v.cota).toBeCloseTo(bhs[0].cota, 6);
+    expect(v.cam.map((c) => c.codigo)).toEqual(colunaDoFuro(p.furos.find((f) => f.id === bhs[0].id)).cam.map((c) => c.codigo));
+  });
+
+  it('o modelo reproduz o perfil 2D nas colunas do corte', () => {
+    const m = modeloBloco(p.furos, { cortes: [corte] });
+    const usadas = m.colunas.filter((c) => c.corte === 'c1');
+    expect(usadas.length).toBeGreaterThan(20);
+    usadas.forEach((v) => {
+      const mod = m.pontual(v.x, v.y).contatos;
+      const nz = mod.filter((c, i) => i === 0 || mod[i - 1] - c > 1e-4);
+      const doPerfil = [v.cota];
+      v.cam.forEach((c) => doPerfil.push(doPerfil.at(-1) - c.esp));
+      expect(nz.length).toBe(doPerfil.length);
+      nz.forEach((c, i) => expect(c).toBeCloseTo(doPerfil[i], 3));
+    });
+  });
+
+  it('ajustar um contato no 2D muda o 3D', () => {
+    const geo = geometriaPerfil(bhs, {});
+    expect(geo.pontas.length).toBeGreaterThan(0);
+    const pt = geo.pontas[0];
+    const ajustado = { ...corte, ajustes: { [pt.chave]: pt.padrao > 0.5 ? 0.3 : 0.9 } };
+    const a = modeloBloco(p.furos, { cortes: [corte] }), b = modeloBloco(p.furos, { cortes: [ajustado] });
+    let dif = 0;
+    a.contatos.forEach((sup, u) => sup.forEach((v, k) => { dif = Math.max(dif, Math.abs(v - b.contatos[u][k])); }));
+    expect(dif).toBeGreaterThan(0.1);
+  });
 });
