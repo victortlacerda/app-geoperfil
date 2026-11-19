@@ -29,10 +29,18 @@ describe('coluna estratigráfica', () => {
     const a = furo('A', 0, 0, 100, [[0, 2, 'ARGS', 'ATR'], [2, 7, 'SAG', 'RES'], [7, 10, 'ARE', 'RES']]);
     const b = furo('B', 30, 0, 102, [[0, 3, 'ARGS', 'ATR'], [3, 6, 'ARGA'], [6, 12, 'SAG', 'RES']]);
     const { unidades, espessuras } = colunaEstratigrafica([a, b]);
-    expect(unidades.map((u) => u.chave)).toEqual(['ARGS|ATR', 'ARGA|', 'SAG|RES', 'ARE|RES']);
+    expect(unidades.map((u) => u.chave)).toEqual(['ARGS', 'ARGA', 'SAG', 'ARE']);
     expect(espessuras.get(a.id)).toEqual([2, 0, 5, 3]);
     expect(espessuras.get(b.id)).toEqual([3, 3, 6, 0]);
   });
+  it('mesmo solo com origem diferente é a mesma camada', () => {
+    const a = furo('A', 0, 0, 100, [[0, 3, 'SAG', 'ATR'], [3, 8, 'ARE']]);
+    const b = furo('B', 30, 0, 100, [[0, 5, 'SAG', 'RES'], [5, 8, 'ARE']]);
+    const { unidades } = colunaEstratigrafica([a, b]);
+    expect(unidades.map((u) => u.codigo)).toEqual(['SAG', 'ARE']);
+    expect(unidades[0].origem).toBe('RES'); // predominante por espessura
+  });
+
   it('ordem invertida entre furos vira unidades repetidas, sem perder nada', () => {
     const a = furo('A', 0, 0, 100, [[0, 4, 'ARGS'], [4, 8, 'SAG']]);
     const b = furo('B', 30, 0, 100, [[0, 4, 'SAG'], [4, 8, 'ARGS']]);
@@ -61,11 +69,22 @@ describe('modelo em bloco', () => {
       expect(contatos[0]).toBeCloseTo(f.cota, 6);
       // as fronteiras não nulas do modelo, de cima para baixo, coincidem com as do furo
       const doModelo = contatos.filter((c, i) => i === 0 || contatos[i - 1] - c > 1e-6);
-      const doFuro = [f.cota, ...camadasDoFuro(f).map((c) => f.cota - c.ate)];
+      const cam = camadasDoFuro(f).filter((c, i, l) => !l[i + 1] || l[i + 1].codigo !== c.codigo);
+      const doFuro = [f.cota, ...cam.map((c) => f.cota - c.ate)];
       expect(doModelo.length).toBe(doFuro.length);
       doModelo.forEach((c, i) => expect(c).toBeCloseTo(doFuro[i], 4));
       if (f.na > 0) expect(na).toBeCloseTo(f.cota - f.na, 6);
     });
+  });
+
+  it('furo repetido em outra posição (projetado no corte): o modelo honra os dois pontos', () => {
+    const f = p.furos[0];
+    const mx = modeloBloco(p.furos, { extras: [{ id: f.id, x: f.x + 12, y: f.y - 20 }] });
+    const a = mx.pontual(f.x, f.y).contatos, b = mx.pontual(f.x + 12, f.y - 20).contatos;
+    a.forEach((c, i) => expect(b[i] - (f.cota - a[0]) * 0).toBeCloseTo(c, 4));
+    // cópia colada em outro furo é ignorada
+    const g = p.furos[1];
+    expect(modeloBloco(p.furos, { extras: [{ id: f.id, x: g.x + 0.2, y: g.y }] }).pontos.length).toBe(p.furos.length);
   });
 
   it('camadas empilhadas nunca se cruzam e o NA não passa do terreno', () => {

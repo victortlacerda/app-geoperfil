@@ -90,7 +90,9 @@ export function interpolador(pts) {
 
 // ── coluna estratigráfica ──
 
-const chave = (c) => `${c.codigo}|${c.origem || ''}`;
+// a camada é identificada pela classificação primária: o mesmo solo se liga entre os
+// furos mesmo com origem diferente (a cor no desenho também é só pela primária)
+const chave = (c) => c.codigo;
 
 /** Alinhamento pela maior subsequência comum: pares [i, j] com a[i] === b[j]. */
 function lcs(a, b) {
@@ -123,7 +125,13 @@ function fundir(a, b) {
  * @returns { unidades: [{ chave, codigo, origem }], espessuras: Map(furoId → number[]) }
  */
 export function colunaEstratigrafica(furos) {
-  const seqs = furos.map((f) => ({ f, cam: camadasDoFuro(f).filter((c) => c.ate > c.de) })).filter((s) => s.cam.length);
+  // camadas seguidas do mesmo solo (só a origem muda) viram uma
+  const juntar = (cam) => cam.reduce((out, c) => {
+    const u = out.at(-1);
+    if (u && u.codigo === c.codigo && Math.abs(u.ate - c.de) < 1e-9) { u.ate = c.ate; if (c.ate - c.de > u.maior) { u.maior = c.ate - c.de; u.origem = c.origem; } } else out.push({ ...c, maior: c.ate - c.de });
+    return out;
+  }, []);
+  const seqs = furos.map((f) => ({ f, cam: juntar(camadasDoFuro(f).filter((c) => c.ate > c.de)) })).filter((s) => s.cam.length);
   if (!seqs.length) return { unidades: [], espessuras: new Map() };
   // funde a partir do furo com mais camadas, depois pelo mais próximo dos já fundidos
   const resto = [...seqs].sort((a, b) => b.cam.length - a.cam.length);
@@ -139,14 +147,19 @@ export function colunaEstratigrafica(furos) {
     G = fundir(G, s.cam.map(chave));
     usados.push(s);
   }
-  const amostra = new Map(seqs.flatMap((s) => s.cam.map((c) => [chave(c), c])));
-  const unidades = G.map((k) => ({ chave: k, codigo: amostra.get(k).codigo, origem: amostra.get(k).origem || '' }));
+  const unidades = G.map((k) => ({ chave: k, codigo: k, origens: {} }));
   const espessuras = new Map();
   seqs.forEach(({ f, cam }) => {
     const e = new Array(G.length).fill(0);
-    lcs(G, cam.map(chave)).forEach(([gi, ci]) => { e[gi] = cam[ci].ate - cam[ci].de; });
+    lcs(G, cam.map(chave)).forEach(([gi, ci]) => {
+      e[gi] = cam[ci].ate - cam[ci].de;
+      const o = cam[ci].origem || '';
+      unidades[gi].origens[o] = (unidades[gi].origens[o] || 0) + e[gi];
+    });
     espessuras.set(f.id, e);
   });
+  // origem predominante (por espessura), só para informação
+  unidades.forEach((u) => { u.origem = Object.entries(u.origens).sort((a, b) => b[1] - a[1])[0]?.[0] || ''; });
   return { unidades, espessuras };
 }
 
@@ -179,23 +192,33 @@ export function dominio(furos, { margem } = {}) {
  *   pontual(x, y) → { contatos: number[], na }   // avaliação exata (seção do corte)
  * }
  */
-export function modeloBloco(furosTodos, { resolucao = 80, margem } = {}) {
+export function modeloBloco(furosTodos, { resolucao = 80, margem, extras = [] } = {}) {
   const furos = furosDoModelo(furosTodos);
   if (!furos.length) return null;
   const { unidades, espessuras } = colunaEstratigrafica(furos);
   const nU = unidades.length;
   const dom = dominio(furos, { margem });
 
-  const fTer = interpolador(furos.map((f) => ({ x: f.x, y: f.y, v: f.cota })));
+  // pontos de dados: cada furo na sua posição e, opcionalmente, repetido em outras
+  // posições (furos projetados na linha do corte, como no Perfil 2D). Uma cópia
+  // muito perto de outro ponto é descartada, para não criar conflito.
+  const porId = new Map(furos.map((f) => [f.id, f]));
+  const dmin = Math.max(1, Math.hypot(dom.x1 - dom.x0, dom.y1 - dom.y0) * 0.01);
+  const pontos = furos.map((f) => ({ f, x: f.x, y: f.y }));
+  extras.forEach((e) => {
+    const f = porId.get(e.id);
+    if (f && !pontos.some((p) => Math.hypot(p.x - e.x, p.y - e.y) < dmin && !(p.f === f && Math.hypot(p.x - e.x, p.y - e.y) < 1e-6))) pontos.push({ f, x: e.x, y: e.y, extra: true });
+  });
+
+  const fTer = interpolador(pontos.map(({ f, x, y }) => ({ x, y, v: f.cota })));
   const cotas = furos.map((f) => f.cota);
   const terMin = Math.min(...cotas), terMax = Math.max(...cotas), terPad = Math.max((terMax - terMin) * 0.5, 2);
   const fEsp = unidades.map((u, k) => {
-    const e = furos.map((f) => espessuras.get(f.id)[k]);
-    const max = Math.max(...e);
-    return { f: interpolador(furos.map((f, i) => ({ x: f.x, y: f.y, v: e[i] }))), max: max * 1.25 };
+    const max = Math.max(...furos.map((f) => espessuras.get(f.id)[k]));
+    return { f: interpolador(pontos.map(({ f, x, y }) => ({ x, y, v: espessuras.get(f.id)[k] }))), max: max * 1.25 };
   });
-  const comNA = furos.filter((f) => f.na > 0);
-  const fNA = comNA.length ? interpolador(comNA.map((f) => ({ x: f.x, y: f.y, v: f.cota - f.na }))) : null;
+  const comNA = pontos.filter(({ f }) => f.na > 0);
+  const fNA = comNA.length ? interpolador(comNA.map(({ f, x, y }) => ({ x, y, v: f.cota - f.na }))) : null;
 
   const pontual = (x, y) => {
     const t = Math.min(terMax + terPad, Math.max(terMin - terPad, fTer(x, y)));
@@ -228,7 +251,7 @@ export function modeloBloco(furosTodos, { resolucao = 80, margem } = {}) {
     };
     return { contatos: contatos.map(q), na: na ? q(na) : null };
   };
-  return { dominio: dom, nx, ny, xs, ys, unidades, contatos, na, pontual, naMalha, furos };
+  return { dominio: dom, nx, ny, xs, ys, unidades, contatos, na, pontual, naMalha, furos, pontos };
 }
 
 /**

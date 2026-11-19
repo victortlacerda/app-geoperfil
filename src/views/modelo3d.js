@@ -13,6 +13,16 @@ import { NA_COR } from '../styles/tema.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (v, d = 1) => v.toFixed(d).replace('.', ',');
+/**
+ * Cor da classificação no 3D: a mesma cor do projeto, mais saturada e um pouco
+ * mais escura. As cores claras (ARGS, SAR, AREA…) ficariam todas cinza com a luz.
+ */
+export function cor3D(code) {
+  const c = new THREE.Color(solo(code).fill), hsl = {};
+  c.getHSL(hsl);
+  const l = hsl.l > 0.45 ? 0.45 + (hsl.l - 0.45) * 0.62 : hsl.l;
+  return c.setHSL(hsl.h, Math.min(1, hsl.s * 1.1 + 0.08), l);
+}
 const GRAMA = 0x8fa66b, BASE = 0x8a8278, LINHA = 0x2b2b2b, AZUL = 0x1566d1;
 
 export function criarModelo3D(app) {
@@ -73,7 +83,7 @@ export function criarModelo3D(app) {
       materiais.set(k, new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.92, metalness: 0, polygonOffset: grama, polygonOffsetFactor: grama ? -2 : 0, polygonOffsetUnits: grama ? -2 : 0 }));
     }
     const m = materiais.get(k);
-    m.color.set(code === '_grama' ? GRAMA : code === '_base' ? BASE : solo(code).fill);
+    m.color.set(code === '_grama' ? GRAMA : code === '_base' ? BASE : cor3D(code));
     m.emissive.set(code === '_base' ? 0x2e2a26 : 0x000000);
     const op = code === '_base' ? 1 : (code === '_grama' ? 1 : o.opacidade[code] ?? 1) * (o.raiox && tipo === 'm' ? 0.28 : 1);
     m.opacity = op; m.transparent = op < 1; m.depthWrite = op >= 1;
@@ -239,7 +249,17 @@ export function criarModelo3D(app) {
   function construir() {
     limpar(raiz); limpar(rotulos);
     const doc = app.store.doc, corte = app.corteAtivo();
-    modelo = modeloBloco(doc.furos);
+    // com o bloco cortado, os furos do corte também valem na posição projetada na
+    // linha do corte (como no Perfil 2D): a face do corte passa pelos dados deles
+    const extras = [];
+    if (corte && o.cortar) {
+      const [ax, ay] = corte.p1, [bx, by] = corte.p2, Lc = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / Lc, uy = (by - ay) / Lc;
+      furosNoCorte(corte, doc.furos).forEach((f) => {
+        const t = (f.x - ax) * ux + (f.y - ay) * uy;
+        extras.push({ id: f.id, x: ax + ux * t, y: ay + uy * t });
+      });
+    }
+    modelo = modeloBloco(doc.furos, { extras });
     const info = document.getElementById('m3dInfo');
     if (!modelo) { corteInfo = null; info.textContent = 'Lance furos com camadas para ver o modelo.'; renderLegenda(); return; }
     const dom = modelo.dominio, nU = modelo.unidades.length;
@@ -275,9 +295,11 @@ export function criarModelo3D(app) {
       const { corte: c, seg, nrm, u, d } = corteInfo;
       if (cortando()) {
         construirFace(modelo, seg);
-        const tol = Math.max(1, c.faixa ?? ref.diag * 0.05);
-        // os furos do corte (o lado escolhido na planta) são projetados na face, como no Perfil 2D
-        const projetar = d === 0 ? furosNoCorte(c, modelo.furos) : modelo.furos.filter((f) => Math.abs(dist(f)) <= tol);
+        // no plano do corte: os furos do corte projetados (o modelo passa por eles ali);
+        // com o plano deslocado, só os furos que estão praticamente sobre ele
+        const ids = new Set(modelo.pontos.filter((pt) => pt.extra).map((pt) => pt.f.id));
+        const tol = Math.max(1, ref.diag * 0.01);
+        const projetar = d === 0 ? modelo.furos.filter((f) => ids.has(f.id) || (furosNoCorte(c, modelo.furos).includes(f) && Math.abs(dist(f)) <= tol)) : modelo.furos.filter((f) => Math.abs(dist(f)) <= tol);
         if (o.furos) projetar.forEach((f) => {
           const t = (f.x - seg[0][0]) * u[0] + (f.y - seg[0][1]) * u[1];
           const x = seg[0][0] + u[0] * t - nrm[0] * raio * 1.1, y = seg[0][1] + u[1] * t - nrm[1] * raio * 1.1;
@@ -355,7 +377,7 @@ export function criarModelo3D(app) {
     document.getElementById('legenda3d').innerHTML = usados.length ? '<div class="leg-ttl">Camadas</div>' + usados.map((s) => `
       <div class="leg3d-row">
         <input type="checkbox" data-mostrar="${s.code}" ${o.ocultos.has(s.code) ? '' : 'checked'} title="Mostrar ou esconder"/>
-        <span class="leg-sw" style="background:${s.fill}"></span><span class="leg3d-nome" title="${esc(s.label)}">${esc(s.code)}</span>
+        <span class="leg-sw" style="background:#${cor3D(s.code).getHexString()}"></span><span class="leg3d-nome" title="${esc(s.label)}">${esc(s.code)}</span>
         <input type="range" min="0.1" max="1" step="0.05" value="${o.opacidade[s.code] ?? 1}" data-opac="${s.code}" title="Transparência"/>
       </div>`).join('') : '';
   }
