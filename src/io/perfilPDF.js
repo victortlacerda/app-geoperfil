@@ -5,27 +5,12 @@ import { geometriaPerfil } from '../geo/perfil2d.js';
 import { hachuraPoligono } from './hachura.js';
 import { secLabel } from '../model/catalogo.js';
 import { utmParaGeo, ehGeorreferenciado } from '../geo/coordenadas.js';
+import { escalasPerfil } from './escalas.js';
 
-const ESCALAS = [50, 100, 125, 200, 250, 500, 750, 1000, 1250, 2000, 2500, 5000, 7500, 10000, 20000, 25000, 50000];
+export { escalaPadrao, escolherEscalas, escalasPerfil } from './escalas.js';
+
 const AZUL = [21, 102, 209], CINZA = [110, 110, 105], TINTA = [26, 26, 26], VERMELHO = [163, 45, 45];
 const fmt = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d).replace('.', ',') : '—');
-
-/** Menor escala padrão (1:E) em que `metros` cabem em `mm`. */
-export function escalaPadrao(metros, mm) {
-  const min = (metros * 1000) / mm;
-  return ESCALAS.find((e) => e >= min) || Math.ceil(min / 10000) * 10000;
-}
-
-/**
- * Escalas do desenho: horizontal (Eh) e vertical (Ev), com Ev ≤ Eh
- * (exagero vertical ≥ 1). Retorna também o exagero.
- */
-export function escolherEscalas(comprimento, altura, larguraMm, alturaMm) {
-  const Eh = escalaPadrao(Math.max(comprimento, 1), larguraMm);
-  let Ev = escalaPadrao(Math.max(altura, 1), alturaMm);
-  if (Ev > Eh) Ev = Eh;
-  return { Eh, Ev, exagero: Eh / Ev };
-}
 
 /**
  * Gera o PDF do perfil.
@@ -42,20 +27,7 @@ export function gerarPerfilPDF(projeto, perfil, { axis = 'cota', modo = 'interpo
 
   // área do desenho (acima do carimbo)
   const carH = 46, areaX0 = M + 20, areaX1 = PW - M - 14, areaY0 = M + 20, areaY1 = PH - M - carH - 16;
-  const fundoCota = Math.min(...geo.fundo.map(([, c]) => c));
-  const topoCota = Math.max(...bhs.map((b) => b.cota));
-  const altura = topoCota - fundoCota;
-  let { Eh, Ev } = escolherEscalas(geo.totDist, altura * 1.05, areaX1 - areaX0, areaY1 - areaY0 - 8);
-  // a faixa de cotas é arredondada para a grade: sobe a escala vertical até caber
-  let passoC, cTopo, cBase;
-  for (;;) {
-    passoC = niceStep(((areaY1 - areaY0) * Ev) / 1000 / 8);
-    cTopo = Math.ceil((topoCota + altura * 0.02) / passoC) * passoC;
-    cBase = Math.floor((fundoCota - altura * 0.02) / passoC) * passoC;
-    if (((cTopo - cBase) * 1000) / Ev <= areaY1 - areaY0 - 8) break;
-    Ev = ESCALAS.find((e) => e > Ev) || Ev * 2;
-  }
-  if (Ev > Eh) Eh = Ev;
+  const { Eh, Ev, passoC, cTopo, cBase } = escalasPerfil(geo, bhs, areaX1 - areaX0, areaY1 - areaY0);
   const exagero = Eh / Ev;
   const kx = 1000 / Eh, ky = 1000 / Ev; // mm por metro
   const larg = geo.totDist * kx, x0 = areaX0 + Math.max(0, (areaX1 - areaX0 - larg) / 2);

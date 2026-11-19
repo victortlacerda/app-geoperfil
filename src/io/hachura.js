@@ -100,3 +100,33 @@ export function hachuraPoligono(pts, solo, sec, esc = 1) {
     pontos: pontos.filter(([x, y]) => dentro(x, y, pts)),
   };
 }
+
+/**
+ * Abre buracos na hachura: tira das linhas os trechos dentro dos retângulos
+ * [x0, y0, x1, y1] e descarta os pontos que caem neles. No DXF não existe
+ * fundo branco atrás do texto, então o texto ganha um vão na hachura.
+ */
+export function furarHachura({ linhas, pontos }, rets) {
+  if (!rets.length) return { linhas, pontos };
+  const dentroRet = (x, y, [a, b, c, d]) => x >= a && x <= c && y >= b && y <= d;
+  let segs = linhas;
+  rets.forEach((r) => {
+    const out = [];
+    segs.forEach(([x1, y1, x2, y2]) => {
+      // intervalo [t0, t1] do segmento dentro do retângulo (Liang–Barsky)
+      const dx = x2 - x1, dy = y2 - y1;
+      let t0 = 0, t1 = 1, fora = false;
+      [[-dx, x1 - r[0]], [dx, r[2] - x1], [-dy, y1 - r[1]], [dy, r[3] - y1]].forEach(([p, q]) => {
+        if (fora) return;
+        if (Math.abs(p) < 1e-12) { if (q < 0) fora = true; return; }
+        const t = q / p;
+        if (p < 0) { if (t > t1) fora = true; else if (t > t0) t0 = t; } else { if (t < t0) fora = true; else if (t < t1) t1 = t; }
+      });
+      if (fora || t1 - t0 < 1e-9) { out.push([x1, y1, x2, y2]); return; }
+      if (t0 > 1e-9) out.push([x1, y1, x1 + dx * t0, y1 + dy * t0]);
+      if (t1 < 1 - 1e-9) out.push([x1 + dx * t1, y1 + dy * t1, x2, y2]);
+    });
+    segs = out;
+  });
+  return { linhas: segs, pontos: pontos.filter(([x, y]) => !rets.some((r) => dentroRet(x, y, r))) };
+}

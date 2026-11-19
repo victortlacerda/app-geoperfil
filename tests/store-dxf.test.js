@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { criarStore, lerAutosave } from '../src/store.js';
 import { projetoExemplo } from '../src/model/projeto.js';
 import { gerarDXF } from '../src/io/dxf.js';
+import { escalasPerfil } from '../src/io/escalas.js';
+import { geometriaPerfil } from '../src/geo/perfil2d.js';
 import { perfilDoCorte } from '../src/geo/corte.js';
 import { extensaoCotas } from '../src/geo/zonas.js';
 
@@ -69,18 +71,45 @@ describe('DXF', () => {
   it('contém planta e perfil', () => {
     expect(dxf).toContain('PLANTA DE LOCACAO');
     expect(dxf).toContain("PERFIL GEOLOGICO - CORTE A-A'");
-    expect((dxf.match(/\nCIRCLE\n/g) || []).length).toBe(4);
+    expect((dxf.match(/\nCIRCLE\n8\nFUROS\n/g) || []).length).toBe(4);
   });
 
   it('todas as camadas usadas estão declaradas na tabela LAYER', () => {
     const declaradas = new Set([...dxf.matchAll(/0\nLAYER\n2\n([^\n]+)\n/g)].map((m) => m[1]));
-    const usadas = new Set([...dxf.matchAll(/\n(?:LINE|CIRCLE|TEXT|POLYLINE|VERTEX|SEQEND)\n8\n([^\n]+)\n/g)].map((m) => m[1]));
+    const usadas = new Set([...dxf.matchAll(/\n(?:LINE|CIRCLE|TEXT|POLYLINE|VERTEX|SEQEND|SOLID)\n8\n([^\n]+)\n/g)].map((m) => m[1]));
     usadas.forEach((l) => expect(declaradas.has(l), l).toBe(true));
+  });
+
+  it('usa as escalas do PDF e textos dimensionados para plotar em 1:Eh', () => {
+    const geo = geometriaPerfil(bhs, {});
+    const { Eh, Ev } = escalasPerfil(geo, bhs);
+    expect(dxf).toContain(`Escala horizontal 1:${Eh} - vertical 1:${Ev}`);
+    // o nome do furo tem 3 mm no papel
+    const m = dxf.match(/\n40\n([\d.]+)\n1\nSP-01\n/g).map((t) => +t.split('\n')[2]);
+    expect(m.some((h) => Math.abs(h - (3 * Eh) / 1000) < 1e-6)).toBe(true);
+    expect(dxf).toContain('0\nSTYLE\n2\nGEOPERFIL');
+    expect(dxf).toContain('0\nLTYPE\n2\nTRACEJADA');
+  });
+
+  it('nenhum texto de rótulo cai sobre a régua de SPT', () => {
+    const geo = geometriaPerfil(bhs, {});
+    const { Eh, Ev, cBase } = escalasPerfil(geo, bhs);
+    const kv = Eh / Ev, u = Eh / 1000;
+    const rot = [...dxf.matchAll(/0\nTEXT\n8\nROTULOS\n10\n([-\d.]+)\n20\n([-\d.]+)\n30\n0.0\n40\n([\d.]+)\n1\n([^\n]+)\n/g)]
+      .map((m) => ({ x: +m[1], y: +m[2], h: +m[3], t: m[4] }));
+    expect(rot.length).toBeGreaterThan(3);
+    rot.forEach((r) => bhs.forEach((b) => {
+      const prof = Math.max(...b.layers.map((l) => l.ate));
+      const w = r.t.length * r.h * 0.66;
+      const naFaixaY = r.y > (b.cota - prof - cBase) * kv && r.y < (b.cota - cBase) * kv;
+      const naFaixaX = r.x + w / 2 > b.dist - 0.9 * u && r.x - w / 2 < b.dist + 0.9 * u;
+      expect(naFaixaY && naFaixaX, `${r.t} sobre ${b.name}`).toBe(false);
+    }));
   });
 
   it('sem corte gera só a planta', () => {
     const so = gerarDXF(p, { bhs: [] });
     expect(so).toContain('PLANTA');
-    expect(so).not.toContain('PERFIL');
+    expect(so).not.toContain('PERFIL GEOLOGICO');
   });
 });

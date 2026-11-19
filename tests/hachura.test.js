@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dentro, recortarSegmento, hachuraPoligono } from '../src/io/hachura.js';
+import { dentro, recortarSegmento, hachuraPoligono, furarHachura } from '../src/io/hachura.js';
 import { solo } from '../src/model/catalogo.js';
 
 const cunha = [[0, 0], [10, 0], [0, 4]]; // triângulo
@@ -32,5 +32,16 @@ describe('hachura em polígono', () => {
 
   it('polígono degenerado não gera nada', () => {
     expect(hachuraPoligono([[0, 0], [5, 0], [5, 0]], solo('ARGS'), '')).toEqual({ linhas: [], pontos: [] });
+  });
+});
+
+describe('furarHachura', () => {
+  it('abre o vão do retângulo nas linhas e tira os pontos de dentro', () => {
+    const r = furarHachura({ linhas: [[0, 1, 10, 1], [0, 5, 10, 5]], pontos: [[5, 1], [1, 1]] }, [[4, 0, 6, 2]]);
+    expect(r.linhas).toEqual([[0, 1, 4, 1], [6, 1, 10, 1], [0, 5, 10, 5]]);
+    expect(r.pontos).toEqual([[1, 1]]);
+  });
+  it('linha inteira dentro some', () => {
+    expect(furarHachura({ linhas: [[4.5, 1, 5.5, 1]], pontos: [] }, [[4, 0, 6, 2]]).linhas).toEqual([]);
   });
 });
