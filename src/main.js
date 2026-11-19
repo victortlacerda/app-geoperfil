@@ -31,7 +31,7 @@ const ui = {
   view: 'planta', furoId: null, corteId: null, metroSel: null, rp: 'chart', linhasMin: {},
   graficoOculto: new Set(), tool: 'furo', faixa: 50, incluir: 'lado',
   planta: { k: 2, cx: 0, cy: 0 },
-  perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0 },
+  perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0, modo: 'interpolado', editar: false },
 };
 
 const app = {
@@ -307,9 +307,34 @@ const acoes = {
     baixar(gerarDXF(store.doc, { ...d, corte }, ui.perfil.axis), nomeArquivo(`${store.doc.projeto.nome}${corte ? '_' + corte.nome : ''}`, 'dxf'), 'application/dxf');
     if (d.bhs.length < 2) toast('DXF gerado só com a planta: o corte ativo precisa de pelo menos 2 furos para ter perfil.');
   },
-  pdf() {
-    if (ui.view !== 'perfil') { ui.view = 'perfil'; render(); }
-    setTimeout(() => window.print(), 120);
+  async pdf() {
+    const corte = app.corteAtivo();
+    if (!corte) { toast('Escolha um corte para gerar o PDF do perfil.'); return; }
+    const d = perfil.dados();
+    if (d.bhs.length < 2) { toast(`O corte ${corte.nome} precisa de pelo menos 2 furos.`); return; }
+    try {
+      const { gerarPerfilPDF } = await import('./io/perfilPDF.js');
+      const pdf = gerarPerfilPDF(store.doc, { ...d, corte }, { axis: ui.perfil.axis, modo: ui.perfil.modo });
+      baixar(pdf.output('blob'), nomeArquivo(`perfil_${store.doc.projeto.nome}_${corte.nome}`, 'pdf'), 'application/pdf');
+    } catch (e) { toast('Erro ao gerar o PDF: ' + e.message, 6000); }
+  },
+  modoPerfil(m) {
+    ui.perfil.modo = m;
+    $('btn-interp').classList.toggle('active', m === 'interpolado'); $('btn-degrau').classList.toggle('active', m === 'degrau');
+    $('btn-editar').disabled = m === 'degrau'; $('btn-restaurar').disabled = m === 'degrau';
+    perfil.draw();
+  },
+  editarContatos() {
+    ui.perfil.editar = !ui.perfil.editar;
+    $('btn-editar').classList.toggle('active', ui.perfil.editar);
+    if (ui.perfil.editar) toast('Arraste as alças ◆ para mudar onde cada camada acunha ou a posição das transições. Duplo clique volta ao padrão.', 6000);
+    perfil.draw();
+  },
+  restaurarContatos() {
+    const c = app.corteAtivo();
+    if (!c || !c.ajustes || !Object.keys(c.ajustes).length) { toast('Este corte já está na interpretação automática.'); return; }
+    store.commit((d) => { delete d.cortes.find((q) => q.id === c.id).ajustes; });
+    toast('Interpretação automática restaurada (Ctrl+Z desfaz).');
   },
 };
 
@@ -367,4 +392,4 @@ requestAnimationFrame(() => {
 });
 
 // acesso para depuração e testes de ponta a ponta
-window.geoperfil = { store, ui, render, furosNoCorte, camadasDoFuro, planta, utmParaGeo, geoParaUtm };
+window.geoperfil = { store, ui, render, furosNoCorte, camadasDoFuro, planta, utmParaGeo, geoParaUtm, perfilDados: () => perfil.dados(), perfilXY: (d, c) => perfil.xy(d, c) };

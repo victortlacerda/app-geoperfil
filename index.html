@@ -186,10 +186,16 @@
         <button class="t-btn active" id="btn-spt" data-action="opt" data-arg="showSPT">SPT</button>
         <button class="t-btn active" id="btn-hatch" data-action="opt" data-arg="showHatch">Hachuras</button>
         <div class="tsep"></div>
+        <button class="t-btn active" id="btn-interp" data-action="modoPerfil" data-arg="interpolado" title="Contatos ligados entre os furos, com acunhamento">Interpolado</button>
+        <button class="t-btn" id="btn-degrau" data-action="modoPerfil" data-arg="degrau" title="Troca de material no meio do vão">Degrau</button>
+        <button class="t-btn" id="btn-editar" data-action="editarContatos" title="Arraste as alças ◆ para mudar onde cada camada acunha ou onde fica a transição">✎ Ajustar contatos</button>
+        <button class="t-btn" id="btn-restaurar" data-action="restaurarContatos" title="Volta à interpretação automática deste corte">Restaurar</button>
+        <div class="tsep"></div>
         <span class="tlbl muted" id="zoomLabel">100%</span>
         <button class="t-btn" data-action="zoom" data-arg="-0.25">−</button>
         <button class="t-btn" data-action="zoom" data-arg="0.25">+</button>
         <button class="t-btn" data-action="zoomFit">Fit</button>
+        <div class="push"><button class="t-btn" data-action="pdf">PDF do perfil (A3)</button></div>
       </div>
       <div class="canvas-area" id="canvasArea">
         <canvas id="profileCanvas"></canvas>

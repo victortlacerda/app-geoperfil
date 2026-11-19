@@ -1,10 +1,11 @@
-// Perfil 2D ao longo do corte ativo. A troca de material acontece no meio do vão;
-// a Fase 4 traz contatos interpolados.
-import { buildZones, cotasContato, niceStep, extensaoCotas } from '../geo/zonas.js';
+// Perfil 2D ao longo do corte ativo, desenhado a partir da geometria de geo/perfil2d.js
+// (contatos interpolados com acunhamento, ou troca no meio do vão no modo "degrau").
+import { niceStep, extensaoCotas } from '../geo/zonas.js';
+import { geometriaPerfil } from '../geo/perfil2d.js';
 import { perfilDoCorte } from '../geo/corte.js';
 import { secLabel } from '../model/catalogo.js';
 import { ajustarCanvas, hachurar } from './hatch.js';
-import { NA_COR, PERIGO } from '../styles/tema.js';
+import { NA_COR, PERIGO, ACCENT } from '../styles/tema.js';
 
 const PML = 68, PMR = 160, PMT = 44, PMB = 44, RULER_W = 8, SPT_TXT = 4;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -13,7 +14,8 @@ export function criarPerfil(app) {
   const area = document.getElementById('canvasArea');
   const canvas = document.getElementById('profileCanvas');
   const o = app.ui.perfil; // { axis, showNA, showLab, showSPT, showHatch, zoom, panX }
-  let W = 0, H = 0, bhs = [], ext = { minCota: 0, maxCota: 1 };
+  let W = 0, H = 0, bhs = [], ext = { minCota: 0, maxCota: 1 }, geo = null;
+  let arrasteP = null; // alça de acunhamento sendo arrastada: { chave, vao, tipo, t }
 
   const ppW = () => W - PML - PMR, ppH = () => H - PMT - PMB;
   const maxDist = () => (bhs.length > 1 ? Math.max(...bhs.map((b) => b.dist)) : 100);
@@ -80,8 +82,12 @@ export function criarPerfil(app) {
   }
 
   function atualizarDados() {
-    bhs = perfilDoCorte(app.corteAtivo(), app.store.doc.furos);
+    const corte = app.corteAtivo();
+    bhs = perfilDoCorte(corte, app.store.doc.furos);
     ext = extensaoCotas(bhs);
+    const ajustes = { ...(corte?.ajustes || {}) };
+    if (arrasteP) ajustes[arrasteP.chave] = arrasteP.t;
+    geo = geometriaPerfil(bhs, { ajustes, modo: o.modo });
     clampPan();
   }
 
@@ -133,43 +139,23 @@ export function criarPerfil(app) {
     ctx.translate(12, PMT + ppH() / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.axis === 'cota' ? 'Cota (m)' : 'Profundidade (m)', 0, 0);
     ctx.restore();
 
-    // zonas
+    // camadas (polígonos da geometria do perfil)
     ctx.save(); ctx.beginPath(); ctx.rect(PML, PMT, ppW(), ppH()); ctx.clip();
-    for (let i = 0; i < bhs.length - 1; i++) {
-      const A = bhs[i], B = bhs[i + 1];
-      if (!A.layers.length || !B.layers.length) continue;
-      const zones = buildZones(A, B), x1 = pwx(A.dist), x2 = pwx(B.dist), xm = (x1 + x2) / 2;
-      zones.forEach((z) => {
-        const yt = pwy(z.cTop), yb = pwy(z.cBot);
-        const divisa = (forte) => { ctx.save(); ctx.strokeStyle = forte ? 'rgba(40,40,40,0.55)' : 'rgba(50,50,50,0.5)'; ctx.lineWidth = forte ? 1.5 : 1; ctx.setLineDash(forte ? [4, 3] : [3, 2]); ctx.beginPath(); ctx.moveTo(xm, yt); ctx.lineTo(xm, yb); ctx.stroke(); ctx.restore(); };
-        if (z.sameP && z.sameS) drawZonePoly(ctx, [[x1, yt], [x2, yt], [x2, yb], [x1, yb]], z.lA.solo, z.lA.sec);
-        else {
-          if (z.lA) drawZonePoly(ctx, [[x1, yt], [xm, yt], [xm, yb], [x1, yb]], z.lA.solo, z.lA.sec);
-          if (z.lB) drawZonePoly(ctx, [[xm, yt], [x2, yt], [x2, yb], [xm, yb]], z.lB.solo, z.lB.sec);
-          divisa(!z.sameP);
-        }
-      });
-      ctx.save(); ctx.strokeStyle = 'rgba(40,40,40,0.4)'; ctx.lineWidth = 0.8; ctx.setLineDash([5, 3]);
-      cotasContato(A, B).forEach((c) => {
-        const isA = A.layers.some((l) => Math.abs(A.cota - l.ate - c) < 0.001), isB = B.layers.some((l) => Math.abs(B.cota - l.ate - c) < 0.001);
-        if (!isA && !isB) return;
-        ctx.beginPath(); ctx.moveTo(isA ? x1 : xm, pwy(c)); ctx.lineTo(isB ? x2 : xm, pwy(c)); ctx.stroke();
-      });
-      ctx.restore();
-      if (o.showLab) zones.forEach((z) => {
-        const yt = pwy(z.cTop), h = pwy(z.cBot) - yt;
-        if (h < 10) return;
-        const lbl = (l, lx) => {
-          if (!l) return;
-          const sec = secLabel(l.sec);
-          if (h >= 26) { drawTextBg(ctx, l.solo.code, lx, yt + h / 2 - 7, '600 11px sans-serif', '#111'); if (sec && sec !== '—') drawTextBg(ctx, sec, lx, yt + h / 2 + 6, '500 10px sans-serif', '#222'); }
-          else if (h >= 16) { drawTextBg(ctx, l.solo.code, lx, yt + h / 2 - 5, '600 10px sans-serif', '#111'); if (sec && sec !== '—') drawTextBg(ctx, sec, lx, yt + h / 2 + 5, '500 9px sans-serif', '#222'); }
-          else drawTextBg(ctx, l.solo.code, lx, yt + h / 2, '600 9px sans-serif', '#111');
-        };
-        if (z.sameP && z.sameS) lbl(z.lA || z.lB, (x1 + x2) / 2);
-        else { lbl(z.lA, (x1 + xm) / 2); lbl(z.lB, (xm + x2) / 2); }
-      });
-    }
+    const tela = (pts) => pts.map(([d, c]) => [pwx(d), pwy(c)]);
+    geo.poligonos.forEach((p) => drawZonePoly(ctx, tela(p.pts), p.solo, p.sec));
+    ctx.save(); ctx.strokeStyle = 'rgba(30,30,30,0.6)'; ctx.lineWidth = 0.9; ctx.lineJoin = 'round';
+    geo.poligonos.forEach((p) => {
+      ctx.beginPath(); tela(p.pts).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.stroke();
+    });
+    ctx.restore();
+    if (o.showLab) geo.poligonos.forEach((p) => {
+      const { d, c, h: hm } = p.rotulo, x = pwx(d), y = pwy(c), h = pwy(c - hm / 2) - pwy(c + hm / 2);
+      if (h < 10) return;
+      const sec = secLabel(p.sec);
+      if (h >= 26) { drawTextBg(ctx, p.solo.code, x, y - 7, '600 11px sans-serif', '#111'); if (sec) drawTextBg(ctx, sec, x, y + 6, '500 10px sans-serif', '#222'); }
+      else if (h >= 16) { drawTextBg(ctx, p.solo.code, x, y - 5, '600 10px sans-serif', '#111'); if (sec) drawTextBg(ctx, sec, x, y + 5, '500 9px sans-serif', '#222'); }
+      else drawTextBg(ctx, p.solo.code, x, y, '600 9px sans-serif', '#111');
+    });
     // terreno
     ctx.strokeStyle = '#1a1a0a'; ctx.lineWidth = 2.5; ctx.beginPath();
     bhs.forEach((b, i) => (i ? ctx.lineTo(pwx(b.dist), pwy(b.cota)) : ctx.moveTo(pwx(b.dist), pwy(b.cota)))); ctx.stroke();
@@ -196,6 +182,13 @@ export function criarPerfil(app) {
       ctx.font = '9px sans-serif'; ctx.fillStyle = '#444';
       ctx.fillText(b.cota ? b.cota.toFixed(1) + 'm' : '', x, PMT - 7);
       ctx.fillText('d=' + b.dist.toFixed(0) + 'm', x, PMT + ppH() + 26);
+      ctx.restore();
+    });
+    if (o.editar && o.modo !== 'degrau') geo.pontas.forEach((pt) => {
+      const x = pwx(pt.d), y = pwy(pt.c), mexida = Math.abs(pt.ponta - pt.padrao) > 1e-6, ativa = arrasteP?.chave === pt.chave;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = ativa || mexida ? ACCENT : '#fff'; ctx.strokeStyle = ACCENT; ctx.lineWidth = 1.5;
+      ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     });
     const [n1, n2] = (corte?.nome || "A–A'").split('–');
@@ -244,7 +237,45 @@ export function criarPerfil(app) {
 
   let tDrag = null, cDrag = null;
   thumb.addEventListener('mousedown', (e) => { tDrag = { x: e.clientX, p: o.panX }; thumb.classList.add('dragging'); e.preventDefault(); });
-  canvas.addEventListener('mousedown', (e) => { if (o.zoom > 1) { cDrag = { x: e.clientX, p: o.panX }; canvas.style.cursor = 'grabbing'; } });
+  function pontaEm(cx, cy) {
+    if (!o.editar || o.modo === 'degrau' || !geo) return null;
+    return geo.pontas.find((pt) => Math.hypot(pwx(pt.d) - cx, pwy(pt.c) - cy) <= 9) || null;
+  }
+  const xyCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.addEventListener('mousedown', (e) => {
+    const [cx, cy] = xyCanvas(e);
+    const pt = pontaEm(cx, cy);
+    if (pt) { arrasteP = { chave: pt.chave, vao: pt.vao, tipo: pt.tipo, t: pt.ponta, padrao: pt.padrao }; e.preventDefault(); return; }
+    if (o.zoom > 1) { cDrag = { x: e.clientX, p: o.panX }; canvas.style.cursor = 'grabbing'; }
+  });
+  canvas.addEventListener('dblclick', (e) => {
+    const [cx, cy] = xyCanvas(e);
+    const pt = pontaEm(cx, cy), corte = app.corteAtivo();
+    if (!pt || !corte) return;
+    app.store.commit((d) => { const c = d.cortes.find((q) => q.id === corte.id); if (c.ajustes) delete c.ajustes[pt.chave]; });
+    app.toast('Acunhamento voltou ao padrão.');
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!arrasteP) return;
+    const [cx] = xyCanvas(e);
+    const dist = o.panX + ((cx - PML) / (ppW() || 1)) * (maxDist() / o.zoom);
+    const [dA, dB] = arrasteP.vao;
+    let t = (dist - dA) / (dB - dA || 1);
+    t = arrasteP.tipo === 'A' ? Math.min(1, Math.max(0.05, t)) : Math.min(0.95, Math.max(0, t));
+    arrasteP.t = +t.toFixed(3);
+    draw();
+  });
+  window.addEventListener('mouseup', () => {
+    if (!arrasteP) return;
+    const a = arrasteP, corte = app.corteAtivo();
+    arrasteP = null;
+    if (!corte) return;
+    app.store.commit((d) => {
+      const c = d.cortes.find((q) => q.id === corte.id);
+      c.ajustes = { ...(c.ajustes || {}) };
+      if (Math.abs(a.t - a.padrao) < 0.01) delete c.ajustes[a.chave]; else c.ajustes[a.chave] = a.t;
+    });
+  });
   window.addEventListener('mousemove', (e) => {
     if (tDrag) {
       const tw = track.offsetWidth, w = Math.max(tw / o.zoom, 40), maxL = tw - w || 1;
@@ -262,6 +293,7 @@ export function criarPerfil(app) {
   canvas.addEventListener('mousemove', (e) => {
     if (cDrag) return;
     const r = canvas.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+    canvas.style.cursor = pontaEm(cx, cy) || arrasteP ? 'ew-resize' : o.zoom > 1 ? 'grab' : 'default';
     const out = document.getElementById('sb-cursor');
     if (bhs.length < 2 || cx < PML || cx > PML + ppW() || cy < PMT || cy > PMT + ppH()) { out.textContent = ''; return; }
     const dist = o.panX + ((cx - PML) / (ppW() || 1)) * (maxDist() / o.zoom);
@@ -274,6 +306,7 @@ export function criarPerfil(app) {
     draw,
     zoomDelta: (d) => setZoom(o.zoom + d),
     zoomFit: () => { o.zoom = 1; o.panX = 0; document.getElementById('zoomLabel').textContent = '100%'; draw(); },
-    dados: () => { atualizarDados(); return { bhs, ext, maxDist: maxDist() }; },
+    dados: () => { atualizarDados(); return { bhs, ext, maxDist: maxDist(), geo }; },
+    xy: (d, c) => [pwx(d), pwy(c)],
   };
 }

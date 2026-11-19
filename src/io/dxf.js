@@ -1,8 +1,9 @@
 // Exportação DXF R12 (AC1009): planta de locação + perfil do corte ativo.
-import { buildZones, cotasContato, niceStep } from '../geo/zonas.js';
+import { niceStep } from '../geo/zonas.js';
+import { geometriaPerfil } from '../geo/perfil2d.js';
 import { SEC } from '../model/catalogo.js';
 import { resolverFuro } from '../model/projeto.js';
-import { linhasHachura, hachuraZona } from './hachura.js';
+import { linhasHachura, hachuraZona, hachuraPoligono } from './hachura.js';
 
 // DXF R12 é ASCII: sem quebras de linha, sem acentos e sem travessão.
 const limpa = (t) => String(t).replace(/[\r\n]+/g, ' ').replace(/[–—]/g, '-')
@@ -54,7 +55,7 @@ export function gerarDXF(projeto, perfil, axis = 'cota') {
   dxf += '0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
   let ent = '';
 
-  const { bhs = [], ext = { minCota: 0, maxCota: 0 }, maxDist: totDist = 0, corte = null } = perfil || {};
+  const { bhs = [], ext = { minCota: 0, maxCota: 0 }, maxDist: totDist = 0, corte = null, geo = null } = perfil || {};
   const temPerfil = bhs.length >= 2;
 
   // ── PLANTA ── deslocada para ficar acima do perfil; o deslocamento vai anotado.
@@ -90,35 +91,23 @@ export function gerarDXF(projeto, perfil, axis = 'cota') {
     ent += D.text('PERFIL GEOLOGICO - CORTE ' + (corte?.nome || ''), 0, maxCota + 7, 2.5, 'LEGENDA');
     ent += D.poly([[0, minCota], [totDist, minCota], [totDist, maxCota], [0, maxCota]], 'BORDA', true);
 
-    for (let i = 0; i < bhs.length - 1; i++) {
-      const A = bhs[i], B = bhs[i + 1];
-      if (!A.layers.length || !B.layers.length) continue;
-      const xA = A.dist, xB = B.dist, xM = (xA + xB) / 2;
-      buildZones(A, B).forEach((z) => {
-        const yT = z.cTop, yB = z.cBot;
-        const drawZ = (x0, x1, solo, sec) => {
-          const ln = soloLy(solo, sec);
-          ent += D.poly([[x0, yB], [x1, yB], [x1, yT], [x0, yT]], ln, true);
-          ent += hatchZone(x0, yB, x1, yT, solo, sec, ln + '_H');
-          const cx = (x0 + x1) / 2, cy = (yT + yB) / 2, h = yT - yB, fs = Math.min(1.2, h * 0.22);
-          if (h > 1 && fs > 0.3) {
-            ent += D.text(solo.code, cx, cy + (h > 2 ? 0.5 : 0), fs, 'SPT_TEXTO');
-            const sl = SEC.find((s) => s.value === sec);
-            if (sl && sec && h > 2) ent += D.text(sl.label, cx, cy - 0.5, fs * 0.75, 'SPT_TEXTO');
-          }
-        };
-        if (z.sameP && z.sameS) drawZ(xA, xB, z.lA.solo, z.lA.sec);
-        else {
-          if (z.lA) drawZ(xA, xM, z.lA.solo, z.lA.sec);
-          if (z.lB) drawZ(xM, xB, z.lB.solo, z.lB.sec);
-          ent += D.line(xM, yT, xM, yB, 'FRONTEIRAS');
-        }
-      });
-      cotasContato(A, B).forEach((c) => {
-        const isA = A.layers.some((l) => Math.abs(A.cota - l.ate - c) < 0.001), isB = B.layers.some((l) => Math.abs(B.cota - l.ate - c) < 0.001);
-        if (isA || isB) ent += D.line(isA ? xA : xM, c, isB ? xB : xM, c, 'FRONTEIRAS');
-      });
-    }
+    // camadas: polígonos da geometria do perfil (contatos interpolados ou degrau)
+    const g = geo || geometriaPerfil(bhs, { ajustes: corte?.ajustes || {} });
+    g.poligonos.forEach((p) => {
+      const ln = soloLy(p.solo, p.sec);
+      ent += D.poly(p.pts, ln, true);
+      const { linhas, pontos } = hachuraPoligono(p.pts, p.solo, p.sec);
+      const r = 1.2 * 0.08;
+      ent += linhas.map(([x1, y1, x2, y2]) => D.line(x1, y1, x2, y2, ln + '_H')).join('');
+      ent += pontos.map(([x, y]) => D.line(x - r, y, x + r, y, ln + '_H') + D.line(x, y - r, x, y + r, ln + '_H')).join('');
+      const { d: cx, c: cy, h } = p.rotulo, fs = Math.min(1.2, h * 0.22);
+      if (h > 1 && fs > 0.3) {
+        ent += D.text(p.solo.code, cx, cy + (h > 2 ? 0.5 : 0), fs, 'SPT_TEXTO');
+        const sl = SEC.find((s) => s.value === p.sec);
+        if (sl && p.sec && h > 2) ent += D.text(sl.label, cx, cy - 0.5, fs * 0.75, 'SPT_TEXTO');
+      }
+      ent += D.poly(p.pts, 'FRONTEIRAS', true);
+    });
     bhs.forEach((b, i) => { if (i) { const p = bhs[i - 1]; ent += D.line(p.dist, p.cota, b.dist, b.cota, 'TERRENO'); } });
     for (let i = 0; i < bhs.length - 1; i++) {
       const a = bhs[i], b = bhs[i + 1];

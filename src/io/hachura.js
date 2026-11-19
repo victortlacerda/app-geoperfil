@@ -57,3 +57,46 @@ export function hachuraZona(x0, y0, x1, y1, solo, sec, esc = 1) {
   else if (sec === 'RSA') lin(0, 0.4);
   return { linhas: L, pontos: P };
 }
+
+/** Ponto dentro de polígono (regra par-ímpar). */
+export function dentro(x, y, pts) {
+  let r = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) r = !r;
+  }
+  return r;
+}
+
+/** Recorta um segmento a um polígono qualquer: lista de trechos internos. */
+export function recortarSegmento([x1, y1, x2, y2], pts) {
+  const dx = x2 - x1, dy = y2 - y1, ss = [0, 1];
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [ax, ay] = pts[j], [bx, by] = pts[i];
+    const ex = bx - ax, ey = by - ay, den = dx * ey - dy * ex;
+    if (Math.abs(den) < 1e-12) continue;
+    const s = ((ax - x1) * ey - (ay - y1) * ex) / den, u = ((ax - x1) * dy - (ay - y1) * dx) / den;
+    if (s > 0 && s < 1 && u >= 0 && u <= 1) ss.push(s);
+  }
+  ss.sort((a, b) => a - b);
+  const out = [];
+  for (let k = 0; k < ss.length - 1; k++) {
+    const a = ss[k], b = ss[k + 1];
+    if (b - a < 1e-9) continue;
+    const m = (a + b) / 2;
+    if (dentro(x1 + dx * m, y1 + dy * m, pts)) out.push([x1 + dx * a, y1 + dy * a, x1 + dx * b, y1 + dy * b]);
+  }
+  return out;
+}
+
+/** Hachura de um polígono: { linhas, pontos } já recortados. */
+export function hachuraPoligono(pts, solo, sec, esc = 1) {
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  if (!(x1 - x0 > 1e-9 && y1 - y0 > 1e-9)) return { linhas: [], pontos: [] };
+  const { linhas, pontos } = hachuraZona(x0, y0, x1, y1, solo, sec, esc);
+  return {
+    linhas: linhas.flatMap((seg) => recortarSegmento(seg, pts)),
+    pontos: pontos.filter(([x, y]) => dentro(x, y, pts)),
+  };
+}

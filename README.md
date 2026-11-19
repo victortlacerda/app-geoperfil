@@ -14,8 +14,9 @@ App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento d
   - N-SPT metro a metro (padrão) ou, como opção, golpes por 15 cm (N = 2º + 3º trechos). Penetração incompleta como `30/12`.
   - Cada classificação tem uma cor só no projeto inteiro (editável).
   - **Boletim em PDF** do furo: perfil com hachuras, classificação e descrição, N-SPT, gráfico, NA e fim da sondagem.
-- **Perfil 2D** com hachuras, régua de SPT, NA, impenetrável, eixo em cota ou profundidade e zoom.
-- **Exportação**: DXF R12 (planta + perfil, layers por solo), PDF pela impressão do navegador, projeto em JSON e furos/cortes em **GeoJSON** e **KML** (Google Earth).
+- **Perfil 2D com contatos interpolados**: as camadas de furos vizinhos são correlacionadas (mesma classificação, na mesma ordem) e ligadas em linha reta; camada sem par acunha no meio do vão; trecho sem correlação vira uma transição lateral. Terreno e fundo ficam sempre retos entre os furos. As pontas de acunhamento e as transições podem ser arrastadas ("Ajustar contatos"), e o ajuste fica salvo no corte. Opção "Degrau" para a troca simples no meio do vão.
+- **PDF do perfil em A3** com escalas padrão (horizontal e vertical), exagero vertical, escala gráfica, legenda e carimbo.
+- **Exportação**: DXF R12 (planta + perfil com os mesmos contatos interpolados, layers por solo), PDF do perfil, projeto em JSON e furos/cortes em **GeoJSON** e **KML** (Google Earth).
 - **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`), inclusive planilhas com abas separadas, e de pontos em GeoJSON/KML.
 - **Desfazer/refazer** (Ctrl+Z / Ctrl+Y) e salvamento automático no navegador.
 
@@ -68,6 +69,6 @@ Tudo em metros. `x` = Leste, `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` quan
 - [x] Fase 1 — Correções e modelo de dados v2
 - [x] Fase 2 — Boletim metro a metro e boletim em PDF
 - [x] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000, GeoJSON/KML)
-- [ ] Fase 4 — Perfil 2D v2 (contatos interpolados)
+- [x] Fase 4 — Perfil 2D v2 (contatos interpolados, ajuste manual, PDF A3 com carimbo, DXF)
 - [ ] Fase 5 — Modelo 3D com three.js
 - [ ] Fase 6 — Integrações e portfólio
