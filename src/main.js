@@ -31,7 +31,7 @@ const ui = {
   view: 'planta', furoId: null, corteId: null, metroSel: null, rp: 'chart', linhasMin: {},
   graficoOculto: new Set(), tool: 'furo', faixa: 50, incluir: 'lado',
   planta: { k: 2, cx: 0, cy: 0 },
-  m3d: { exagero: 3, furos: true, cercas: true, secao: true, terreno: true, na: true, fundo: false, spt: false, cortar: false, deslocamento: 0, ocultos: new Set(), opacidade: {} },
+  m3d: { exagero: 3, furos: true, spt: false, na: true, grama: true, cortar: true, raiox: false, grade: true, deslocamento: 0, ocultos: new Set(), opacidade: {} },
   perfil: { axis: 'cota', showNA: true, showLab: true, showSPT: true, showHatch: true, zoom: 1, panX: 0, modo: 'interpolado', editar: false },
 };
 
@@ -114,6 +114,7 @@ function abrir3D() {
 }
 document.querySelectorAll('[data-m3d]').forEach((el) => el.addEventListener('change', () => {
   ui.m3d[el.dataset.m3d] = el.checked;
+  if (el.dataset.m3d === 'cortar') modelo3d?.reenquadrar();
   modelo3d?.render();
 }));
 $('m3dEx').addEventListener('input', () => { const v = +$('m3dEx').value; $('m3dExVal').textContent = `${v}×`; modelo3d?.definirExagero(v); });

@@ -181,14 +181,13 @@
         <span class="tlbl strong" id="m3dExVal">3×</span>
         <div class="tsep"></div>
         <label class="tlbl chk"><input type="checkbox" data-m3d="furos" checked /> Furos</label>
-        <label class="tlbl chk"><input type="checkbox" data-m3d="cercas" checked /> Cercas</label>
-        <label class="tlbl chk"><input type="checkbox" data-m3d="secao" checked /> Seção do corte</label>
-        <label class="tlbl chk"><input type="checkbox" data-m3d="terreno" checked /> Terreno</label>
-        <label class="tlbl chk"><input type="checkbox" data-m3d="na" checked /> NA</label>
-        <label class="tlbl chk"><input type="checkbox" data-m3d="fundo" /> Fundo</label>
         <label class="tlbl chk"><input type="checkbox" data-m3d="spt" /> N-SPT</label>
+        <label class="tlbl chk"><input type="checkbox" data-m3d="na" checked /> NA</label>
+        <label class="tlbl chk" title="Superfície do terreno em verde"><input type="checkbox" data-m3d="grama" checked /> Grama</label>
+        <label class="tlbl chk" title="Deixa o bloco translúcido para ver os furos por dentro"><input type="checkbox" data-m3d="raiox" /> Raio-X</label>
+        <label class="tlbl chk" title="Régua de cotas, coordenadas e norte"><input type="checkbox" data-m3d="grade" checked /> Referências</label>
         <div class="tsep"></div>
-        <label class="tlbl chk" title="Esconde o que está entre você e a seção do corte"><input type="checkbox" data-m3d="cortar" /> Cortar no plano</label>
+        <label class="tlbl chk" title="Abre o bloco no alinhamento do corte ativo"><input type="checkbox" data-m3d="cortar" checked /> Cortar no corte ativo</label>
         <input type="range" id="m3dDesl" min="-100" max="100" step="1" value="0" title="Desloca o plano de corte (m)" />
         <span class="tlbl" id="m3dDeslVal">0 m</span>
         <div class="push grupo">
@@ -201,7 +200,7 @@
       <div class="cena3d" id="cena3d">
         <div class="legend-panel leg3d" id="legenda3d"></div>
       </div>
-      <div class="statusbar"><span id="m3dInfo">—</span><span class="muted">Arraste para girar · botão direito: mover · roda: zoom</span></div>
+      <div class="statusbar"><span id="m3dInfo">—</span><span id="m3dDica" class="strong"></span><span class="muted">Arraste para girar · botão direito: mover · roda: zoom</span></div>
     </section>
 
     <!-- PERFIL -->

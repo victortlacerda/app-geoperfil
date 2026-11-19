@@ -15,7 +15,7 @@ App web para montar perfis geotécnicos a partir de sondagens SPT: lançamento d
   - Cada classificação tem uma cor só no projeto inteiro (editável).
   - **Boletim em PDF** do furo: perfil com hachuras, classificação e descrição, N-SPT, gráfico, NA e fim da sondagem.
 - **Perfil 2D com contatos interpolados**: as camadas de furos vizinhos são correlacionadas (mesma classificação, na mesma ordem) e ligadas em linha reta; camada sem par acunha no meio do vão; trecho sem correlação vira uma transição lateral. Terreno e fundo ficam sempre retos entre os furos. As pontas de acunhamento e as transições podem ser arrastadas ("Ajustar contatos"), e o ajuste fica salvo no corte. Opção "Degrau" para a troca simples no meio do vão.
-- **Modelo 3D** (three.js): furos em cilindros coloridos por camada, diagrama de cercas (o perfil 2D entre cada par de furos vizinhos na triangulação de Delaunay), superfícies do terreno, do NA e do fundo, e a seção do corte ativo, idêntica ao perfil 2D. Tem plano de corte deslocável, exagero vertical, transparência e visibilidade por classificação, rótulos de N-SPT, vistas prontas e captura de imagem.
+- **Modelo 3D** (three.js): bloco geológico sólido gerado a partir dos furos. As sequências de camadas são correlacionadas numa coluna comum, e a cota do terreno, a espessura de cada camada e o NA são interpolados entre os furos (spline de placa fina, exata nos furos). O bloco tem terreno, camadas empilhadas, paredes de solo nas bordas, NA e furos, e abre em corte no alinhamento do corte ativo, com os furos do corte e o N-SPT na face. Tem exagero vertical, raio-X, transparência e visibilidade por classificação, régua de cotas, coordenadas, norte e captura de imagem.
 - **PDF do perfil em A3** com escalas padrão (horizontal e vertical), exagero vertical, escala gráfica, legenda e carimbo.
 - **Exportação**: DXF R12 (planta + perfil com os mesmos contatos interpolados, layers por solo), PDF do perfil, projeto em JSON e furos/cortes em **GeoJSON** e **KML** (Google Earth).
 - **Importação** de CSV/XLSX pelo cabeçalho (`furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`), inclusive planilhas com abas separadas, e de pontos em GeoJSON/KML.
@@ -71,5 +71,5 @@ Tudo em metros. `x` = Leste, `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` quan
 - [x] Fase 2 — Boletim metro a metro e boletim em PDF
 - [x] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000, GeoJSON/KML)
 - [x] Fase 4 — Perfil 2D v2 (contatos interpolados, ajuste manual, PDF A3 com carimbo, DXF)
-- [x] Fase 5 — Modelo 3D com three.js (cercas, superfícies, seção do corte, plano de corte)
+- [x] Fase 5 — Modelo 3D com three.js (bloco geológico interpolado, corte no alinhamento do corte ativo)
 - [ ] Fase 6 — Integrações e portfólio
