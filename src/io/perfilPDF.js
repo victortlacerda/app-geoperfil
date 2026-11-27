@@ -104,3 +104,11 @@ function carimbo(doc, projeto, perfil, { Eh, Ev, exagero, data, modo, x, y, w, h
   doc.text(coord, x + 3, y + 43.2);
   doc.text('Responsável técnico: ______________________', x + w / 2 + 3, y + 43.2);
 }
+
+/** PDF da prancha (A0 a A3) montada por geo/prancha.js. */
+export function gerarPranchaPDF(prancha) {
+  const [W, H] = prancha.formato;
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'landscape' });
+  renderPDF(doc, prancha.itens);
+  return doc;
+}

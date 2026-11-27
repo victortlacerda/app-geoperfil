@@ -25,6 +25,7 @@
     <div class="vsep"></div>
     <button class="t-btn" data-action="dxf">DXF</button>
     <button class="t-btn" data-action="pdf">PDF</button>
+    <button class="t-btn" data-action="dialogoPrancha" title="Prancha A0–A3 com vários cortes, planta-chave, legenda, notas e carimbo (PDF e DXF)">Prancha</button>
     <input type="file" id="fileOpen" accept=".json" hidden />
     <input type="file" id="fileCSV" accept=".csv,.txt,.xlsx,.geojson,.json,.kml" hidden />
   </div>
@@ -266,6 +267,42 @@
     </div>
     <div class="mbtns">
       <button type="submit" class="mbtn primary">Confirmar</button>
+      <button type="button" class="mbtn secondary" data-action="fecharModal">Cancelar</button>
+    </div>
+  </form>
+</div>
+
+<!-- MODAL: prancha -->
+<div class="modal-bg" id="prModal">
+  <form class="modal modal-largo" id="prForm">
+    <h3>Prancha de perfis</h3>
+    <p class="mnota">Os cortes marcados entram na folha na mesma escala (a maior que couber), com planta-chave, legenda, notas e carimbo.</p>
+    <div class="mrow">
+      <div class="mfield"><label for="prFormato">Formato</label><select id="prFormato"><option>A0</option><option selected>A1</option><option>A2</option><option>A3</option></select></div>
+      <div class="mfield"><label for="prExagero">Exagero vertical</label><select id="prExagero"><option value="1">sem exagero (1×)</option><option value="2">2×</option><option value="2.5">2,5×</option><option value="4">4×</option><option value="5">5×</option><option value="10">10×</option></select></div>
+    </div>
+    <div class="mfield"><label>Cortes</label><div id="prCortes" class="pr-cortes"></div></div>
+    <div class="mrow">
+      <div class="mfield"><label for="prCliente">Cliente</label><input id="prCliente" /></div>
+      <div class="mfield"><label for="prObra">Obra</label><input id="prObra" /></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label for="prLocal">Local</label><input id="prLocal" /></div>
+      <div class="mfield"><label for="prTitulo">Título</label><input id="prTitulo" /></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label for="prResp">Responsável técnico</label><input id="prResp" /></div>
+      <div class="mfield"><label for="prReg">Registro (CREA)</label><input id="prReg" /></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label for="prCodigo">Desenho nº</label><input id="prCodigo" /></div>
+      <div class="mfield"><label for="prFolha">Folha</label><input id="prFolha" /></div>
+    </div>
+    <div class="mfield"><label>Revisões</label><div id="prRevs"></div><button type="button" class="t-btn" id="prAddRev">+ Revisão</button></div>
+    <div class="mfield"><label for="prNotas">Notas (uma por linha)</label><textarea id="prNotas" rows="5"></textarea></div>
+    <div class="mbtns">
+      <button type="submit" class="mbtn primary" data-saida="pdf">Gerar PDF</button>
+      <button type="submit" class="mbtn primary" data-saida="dxf">Gerar DXF</button>
       <button type="button" class="mbtn secondary" data-action="fecharModal">Cancelar</button>
     </div>
   </form>

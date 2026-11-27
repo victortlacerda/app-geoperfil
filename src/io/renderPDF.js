@@ -35,7 +35,7 @@ export function renderPDF(doc, itens) {
       if (it.fundo) {
         const x0 = it.al === 'r' ? it.x - w : it.al === 'c' ? it.x - w / 2 : it.x, hh = it.h * 0.95;
         const yc = it.vb === 'meio' ? it.y : it.y - it.h * 0.35;
-        doc.setFillColor(it.fundo); doc.rect(x0 - 0.8, yc - hh / 2 - 0.2, w + 1.6, hh + 0.4, 'F');
+        doc.setFillColor(it.fundo === true ? '#ffffff' : it.fundo); doc.rect(x0 - 0.8, yc - hh / 2 - 0.2, w + 1.6, hh + 0.4, 'F');
       }
       doc.setTextColor(it.cor || '#000000');
       const opc = { align: al, baseline: it.vb === 'meio' ? 'middle' : 'alphabetic' };

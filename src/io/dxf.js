@@ -18,6 +18,7 @@ import { desenharPerfil, desenharLegenda, legendaPerfil, caixaDe, camadaMaterial
 import { estiloPadrao, resolverFuro } from '../model/projeto.js';
 import { escalaPadrao, escalasPerfil, folgaPerfil } from './escalas.js';
 import { hachuraPoligono } from './hachura.js';
+import { deslocar } from '../geo/prancha.js';
 
 export const ESTILO = 'ROMANS';
 const fmt = (v, d = 2) => v.toFixed(d).replace('.', ',');
@@ -43,6 +44,7 @@ export function aciProxima(hex) {
 const CAMADAS = {
   'PERFIL-GRADE': 8, 'PERFIL-EIXOS': 7, CONTATOS: 7, TERRENO: 7, NA: 5, 'NA-PROJETO': 4, REFERENCIAS: 7, 'TOPO-ROCHOSO': 1,
   BLOCOS: 8, ROTULOS: 7, SONDAGEM: 7, CORTE: 5, TITULO: 7, LEGENDA: 7, HACHURA: 8, PLANTA: 7, 'PLANTA-FUROS': 7, 'PLANTA-CORTES': 1,
+  MOLDURA: 7, CARIMBO: 7, NOTAS: 7,
 };
 const nomeCamada = (n) => String(n || '0').replace(/[<>/\\":;?*|=`,]/g, ' ').trim() || '0';
 
@@ -51,7 +53,7 @@ const nomeCamada = (n) => String(n || '0').replace(/[<>/\\":;?*|=`,]/g, ' ').tri
  * Itens com `grupo` viram um bloco por grupo, inserido no ponto `base[grupo]`;
  * textos com `atrib` viram ATTDEF no bloco e ATTRIB no INSERT.
  */
-function emitir(w, itens, { mm, base = {}, camadasMat }) {
+export function emitir(w, itens, { mm, base = {}, camadasMat = new Set() }) {
   const camada = (nome, cor) => {
     const n = nomeCamada(nome);
     if (!w.layer(n)) {
@@ -171,13 +173,9 @@ export function gerarDXF(projeto, perfil, axis = 'cota') {
     });
     const caixa = caixaDe(itens, u);
     const entradas = legendaPerfil(bhs, geo, { estilo, naProjeto: cfg.naProjeto, referencias: cfg.referencias || [], mostrar: { na: true } });
-    const legMat = entradas.filter((e) => e.tipo === 'material');
     const leg = desenharLegenda(entradas, { x: caixa[0], y: caixa[3] + 8 * u, largura: Math.max(caixa[2] - caixa[0], 200 * u), mm: u, hachura: estilo.hachura });
     // um layer por material, com a cor do material (as amostras da legenda também)
     const camadasMat = new Set(geo.poligonos.map((p) => nomeCamada(camadaMaterial(p.solo, p.sec))));
-    leg.itens.forEach((it) => { if (it.t === 'poli' && it.hachura !== undefined && it.camada === 'LEGENDA' && it.fill && it.pts.length === 4) {
-      const e = legMat.find((q) => q.fill === it.fill); if (e) it.camada = camadaMaterial(e.solo, e.sec);
-    } });
     // ponto de inserção de cada furo: topo do furo
     const base = Object.fromEntries(bhs.map((b) => [`FURO:${b.name}`, [X(b.dist), Y(b.cota)]]));
     emitir(w, [...itens, ...leg.itens], { mm: u, base, camadasMat });
@@ -218,6 +216,21 @@ export function gerarDXF(projeto, perfil, axis = 'cota') {
       [[x1, y1], [x2, y2]].forEach(([x, y]) => w.addLine(point3d(x, y), point3d(x + px * pm(5), y + py * pm(5)), { layerName: 'PLANTA-CORTES' }));
     });
   }
+  return seqendUnico(w.stringify());
+}
+
+/**
+ * DXF da prancha (A0 a A3) em milímetros, 1:1: os itens de geo/prancha.js.
+ * Cada perfil leva sua escala no título; um layer por material com hatch sólido.
+ */
+export function gerarPranchaDXF(prancha, materiais = []) {
+  const w = new DxfWriter();
+  w.setUnits(Units.Millimeters);
+  const st = w.tables.addStyle(ESTILO); st.fontFileName = 'romans.shx';
+  w.addLType('TRACEJADA', '__ __ __', [3, -1.5]);
+  const camadasMat = new Set(materiais.map(nomeCamada));
+  // origem no canto inferior esquerdo da folha
+  emitir(w, deslocar(prancha.itens, 0, -prancha.formato[1]), { mm: 1, camadasMat });
   return seqendUnico(w.stringify());
 }
 

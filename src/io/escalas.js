@@ -1,7 +1,7 @@
 // Escalas padrão do perfil, comuns ao PDF A3 e ao DXF.
 import { niceStep } from '../geo/zonas.js';
 
-export const ESCALAS = [50, 100, 125, 200, 250, 500, 750, 1000, 1250, 2000, 2500, 5000, 7500, 10000, 20000, 25000, 50000];
+export const ESCALAS = [50, 100, 125, 150, 200, 250, 500, 750, 1000, 1250, 2000, 2500, 5000, 7500, 10000, 20000, 25000, 50000];
 
 /** Menor escala padrão (1:E) em que `metros` cabem em `mm`. */
 export function escalaPadrao(metros, mm) {

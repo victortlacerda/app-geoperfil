@@ -200,9 +200,13 @@ export function desenharPerfil(P) {
   (P.furos || bhs).forEach((b) => desenharFuro(add, b, { X, Y, mm, mostrar, estilo }));
 
   // letras do corte
-  const [n1, n2] = (corte?.nome || "A–A'").split('–');
-  add({ t: 'texto', x: fx0 - ex, y: fy0 - 3 * mm, txt: n1 || 'A', h: 4, al: 'c', vb: 'base', cor: CORES.azul, bold: true, camada: 'CORTE' });
-  add({ t: 'texto', x: fx1 + ex, y: fy0 - 3 * mm, txt: n2 || "A'", h: 4, al: 'c', vb: 'base', cor: CORES.azul, bold: true, camada: 'CORTE' });
+  // (nome "A–A'" → A e A' nas pontas; nome livre, como "SM-03/SM-02", fica só no título)
+  const nomeC = corte?.nome || "A–A'";
+  if (nomeC.includes('–')) {
+    const [n1, n2] = nomeC.split('–');
+    add({ t: 'texto', x: fx0 - ex, y: fy0 - 3 * mm, txt: n1 || 'A', h: 4, al: 'c', vb: 'base', cor: CORES.azul, bold: true, camada: 'CORTE' });
+    add({ t: 'texto', x: fx1 + ex, y: fy0 - 3 * mm, txt: n2 || "A'", h: 4, al: 'c', vb: 'base', cor: CORES.azul, bold: true, camada: 'CORTE' });
+  }
   return fechar(itens, P);
 }
 
@@ -321,7 +325,7 @@ export function desenharLegenda(entradas, { x = 0, y = 0, largura = 200, mm = 1,
     const w = amW + 2.5 * mm + largura_(e.texto, hT) * mm + 5 * mm;
     if (cx + w > x + largura && cx > x) { cx = x; cy += 5.6 * mm; }
     const a = cx, b = cy, caixa = [[a, b], [a + amW, b], [a + amW, b + amH], [a, b + amH]];
-    if (e.tipo === 'material') itens.push({ t: 'poli', pts: caixa, fill: e.fill, stroke: CORES.cinza, lw: 0.15, hachura: hachura ? { solo: e.solo, sec: e.sec } : null, camada: 'LEGENDA' });
+    if (e.tipo === 'material') itens.push({ t: 'poli', pts: caixa, fill: e.fill, stroke: CORES.cinza, lw: 0.15, hachura: hachura ? { solo: e.solo, sec: e.sec } : null, camada: camadaMaterial(e.solo, e.sec) });
     else if (e.tipo === 'bloco') {
       const f = formaBloco(a + amW / 2, b + amH / 2, amW * 0.42, amH * 0.48, 'legenda');
       itens.push({ t: 'poli', pts: f.pts, fill: e.fill, stroke: CORES.contorno, lw: 0.15, camada: 'LEGENDA' });

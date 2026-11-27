@@ -42,7 +42,7 @@ export function renderCanvas(ctx, itens, mm, recorte) {
       if (it.fundo) {
         const w = ctx.measureText(it.txt).width, x0 = it.al === 'r' ? -w : it.al === 'c' ? -w / 2 : 0;
         const yc = it.vb === 'meio' ? 0 : -fs * 0.35;
-        ctx.fillStyle = it.fundo; ctx.globalAlpha = 0.9; ctx.fillRect(x0 - 3, yc - fs * 0.55, w + 6, fs * 1.1); ctx.globalAlpha = 1;
+        ctx.fillStyle = it.fundo === true ? '#ffffff' : it.fundo; ctx.globalAlpha = 0.9; ctx.fillRect(x0 - 3, yc - fs * 0.55, w + 6, fs * 1.1); ctx.globalAlpha = 1;
       }
       ctx.fillStyle = it.cor || '#000'; ctx.fillText(it.txt, 0, 0);
       ctx.restore();

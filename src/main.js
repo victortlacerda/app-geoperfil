@@ -2,7 +2,8 @@ import './styles/main.css';
 import { criarStore, lerAutosave } from './store.js';
 import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num, camadasDoFuro, estiloPadrao } from './model/projeto.js';
 import { carregarProjeto, serializar } from './model/arquivo.js';
-import { furosNoCorte } from './geo/corte.js';
+import { furosNoCorte, perfilDoCorte } from './geo/corte.js';
+import { pranchaPadrao } from './geo/prancha.js';
 import { criarPlanta } from './views/planta.js';
 import { criarCamadas } from './views/camadas.js';
 import { criarPerfil } from './views/perfil.js';
@@ -146,6 +147,53 @@ $('desForm').addEventListener('submit', (e) => {
   const spt30 = $('dSpt30').checked;
   store.commit((d) => { d.projeto.naProjeto = na; d.projeto.referencias = refs; d.projeto.estilo = { ...estiloPadrao(d.projeto.estilo || {}), spt30 }; });
   fecharModais();
+});
+
+function linhaRevisao(r = { rev: '', data: new Date().toLocaleDateString('pt-BR'), descricao: '', por: '' }) {
+  const d = document.createElement('div');
+  d.className = 'prrev';
+  d.innerHTML = '<input class="rRev" placeholder="Rev." /><input class="rData" placeholder="Data" /><input class="rDesc" placeholder="Descrição" /><input class="rPor" placeholder="Por" /><button type="button" class="t-btn" title="Remover">✕</button>';
+  d.querySelector('.rRev').value = r.rev ?? ''; d.querySelector('.rData').value = r.data ?? ''; d.querySelector('.rDesc').value = r.descricao ?? ''; d.querySelector('.rPor').value = r.por ?? '';
+  d.querySelector('button').addEventListener('click', () => d.remove());
+  $('prRevs').appendChild(d);
+}
+$('prAddRev').addEventListener('click', () => {
+  const n = document.querySelectorAll('#prRevs .prrev').length;
+  linhaRevisao({ rev: String(n).padStart(2, '0'), data: new Date().toLocaleDateString('pt-BR'), descricao: '', por: '' });
+});
+$('prForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const saida = e.submitter?.dataset.saida || 'pdf';
+  const ids = [...document.querySelectorAll('#prCortes input:checked')].map((i) => i.value);
+  if (!ids.length) { toast('Marque pelo menos um corte.'); return; }
+  const prancha = {
+    formato: $('prFormato').value, exagero: +$('prExagero').value, cortes: ids,
+    cliente: $('prCliente').value.trim(), obra: $('prObra').value.trim(), local: $('prLocal').value.trim(), titulo: $('prTitulo').value.trim(),
+    responsavel: $('prResp').value.trim(), registro: $('prReg').value.trim(), codigo: $('prCodigo').value.trim(), folha: $('prFolha').value.trim(),
+    revisoes: [...document.querySelectorAll('#prRevs .prrev')].map((d) => ({ rev: d.querySelector('.rRev').value.trim(), data: d.querySelector('.rData').value.trim(), descricao: d.querySelector('.rDesc').value.trim(), por: d.querySelector('.rPor').value.trim() })).filter((r) => r.rev || r.descricao),
+    notas: $('prNotas').value.split('\n').map((l) => l.trim()).filter(Boolean),
+  };
+  store.commit((d) => { d.projeto.prancha = prancha; });
+  try {
+    const doc = store.doc, estilo = estiloPadrao(doc.projeto.estilo || {});
+    const perfis = ids.map((id) => doc.cortes.find((k) => k.id === id)).filter(Boolean)
+      .map((corte) => ({ corte, bhs: perfilDoCorte(corte, doc.furos, { porHorizonte: estilo.cor === 'horizonte' }) }));
+    const semFuros = perfis.filter((p) => p.bhs.length < 2).map((p) => p.corte.nome);
+    if (semFuros.length === perfis.length) { toast('Nenhum dos cortes marcados tem 2 furos ou mais.'); return; }
+    const { montarPrancha } = await import('./geo/prancha.js');
+    const pr = montarPrancha(doc, perfis, { estilo });
+    if (!pr.cabe) { toast(`Os cortes não cabem no ${pr.formato.join('×')}: escolha um formato maior ou menos cortes.`); return; }
+    const nome = nomeArquivo(`prancha_${doc.projeto.nome}_${prancha.formato}`, saida);
+    if (saida === 'dxf') {
+      const { gerarPranchaDXF } = await import('./io/dxf.js');
+      baixar(gerarPranchaDXF(pr, pr.materiais), nome, 'application/dxf');
+    } else {
+      const { gerarPranchaPDF } = await import('./io/perfilPDF.js');
+      baixar(gerarPranchaPDF(pr).output('blob'), nome, 'application/pdf');
+    }
+    fecharModais();
+    toast(`Prancha ${prancha.formato} em 1:${pr.escala}${semFuros.length ? ` (sem perfil: ${semFuros.join(', ')})` : ''}.`);
+  } catch (err) { toast('Erro ao gerar a prancha: ' + err.message); console.error(err); }
 });
 
 /** Botões Interpolado / Suave / Degrau refletem o modo do corte ativo. */
@@ -352,6 +400,18 @@ const acoes = {
     if (doEstilo) { store.commit((d) => { const e = estiloPadrao(d.projeto.estilo || {}); e[doEstilo] = !e[doEstilo]; d.projeto.estilo = e; }); return; }
     ui.perfil[k] = !ui.perfil[k];
     botoesEstilo(); perfil.draw();
+  },
+  dialogoPrancha() {
+    if (!store.doc.cortes.length) { toast('Defina pelo menos um corte na aba Planta.'); return; }
+    const c = pranchaPadrao(store.doc.projeto.prancha || {});
+    $('prFormato').value = c.formato; $('prExagero').value = String(c.exagero);
+    const marcados = new Set(c.cortes || store.doc.cortes.map((k) => k.id));
+    $('prCortes').innerHTML = store.doc.cortes.map((k) => `<label><input type="checkbox" value="${k.id}" ${marcados.has(k.id) ? 'checked' : ''}/> ${esc(k.nome)}</label>`).join('');
+    [['prCliente', 'cliente'], ['prObra', 'obra'], ['prLocal', 'local'], ['prTitulo', 'titulo'], ['prResp', 'responsavel'], ['prReg', 'registro'], ['prCodigo', 'codigo'], ['prFolha', 'folha']].forEach(([id, k]) => { $(id).value = c[k] || ''; });
+    if (!c.obra) $('prObra').value = store.doc.projeto.nome || '';
+    $('prRevs').innerHTML = ''; c.revisoes.forEach((r) => linhaRevisao(r));
+    $('prNotas').value = c.notas.join('\n');
+    $('prModal').classList.add('open');
   },
   dialogoDesenho() {
     const p = store.doc.projeto;

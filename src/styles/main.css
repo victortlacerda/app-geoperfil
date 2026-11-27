@@ -209,3 +209,9 @@ button,input,select{font-family:var(--f)}
 .mchk{display:flex;align-items:center;gap:6px;font-size:12px;margin:6px 0 4px}
 .dref{align-items:center;gap:6px;margin-bottom:6px}
 .dref .mfield{margin-bottom:0}
+.modal.modal-largo{width:560px}
+.modal textarea{width:100%;font:inherit;font-size:12px;padding:6px 8px;border:.5px solid var(--br);border-radius:5px;background:var(--bg2);color:var(--tx);resize:vertical}
+.pr-cortes{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px}
+.pr-cortes label{display:flex;align-items:center;gap:5px;font-weight:400}
+.prrev{display:grid;grid-template-columns:52px 96px 1fr 70px 26px;gap:6px;margin-bottom:6px;align-items:center}
+.pr-cortes label{white-space:nowrap;text-transform:none;letter-spacing:0;font-size:12px;color:var(--tx);margin:0}
