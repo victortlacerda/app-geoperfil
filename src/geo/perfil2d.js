@@ -94,8 +94,43 @@ export function sequenciaDoVao(A, B, ajustes = {}) {
     }
     i = j;
   }
+  seq.verticais = contatosVerticais(seq, A, B, ajustes);
   return seq;
 }
+
+/**
+ * Contatos que podem subir ou descer entre os furos: cada par de camadas que ficam
+ * uma sobre a outra num trecho [a, b] do vão. O ajuste (m, positivo = desce) troca
+ * espessura entre as duas, no máximo no meio do trecho e zero nas pontas dele
+ * (nos furos o boletim manda).
+ */
+function contatosVerticais(seq, A, B, ajustes) {
+  const lista = [];
+  const fx = seq.map(faixaT);
+  for (let k = 1; k < seq.length; k++) {
+    if (!seq[k].l.solo) continue;
+    // trechos de k ainda sem vizinho de cima; cada camada acima pega o pedaço em que encosta em k
+    let livres = [[fx[k][0], fx[k][1]]];
+    for (let j = k - 1; j >= 0 && livres.length; j--) {
+      const novos = [];
+      livres.forEach(([a0, b0]) => {
+        const a = Math.max(a0, fx[j][0]), b = Math.min(b0, fx[j][1]);
+        if (b - a <= 1e-9) { novos.push([a0, b0]); return; }
+        if (b - a >= 0.1 && seq[j].l.solo) {
+          const chave = `${A.id}>${B.id}|V|${j}:${chaveCamada(seq[j].l)}|${k}:${chaveCamada(seq[k].l)}`;
+          lista.push({ j, k, a, b, tm: (a + b) / 2, chave, desloc: Number.isFinite(ajustes[chave]) ? ajustes[chave] : 0 });
+        }
+        if (a - a0 > 1e-9) novos.push([a0, a]);
+        if (b0 - b > 1e-9) novos.push([b, b0]);
+      });
+      livres = novos;
+    }
+  }
+  return lista;
+}
+
+/** Bossa do ajuste vertical no trecho [a, b]: 1 no meio, 0 nas pontas. */
+const bossaV = (v, t, S) => (t <= v.a || t >= v.b ? 0 : S(1 - Math.abs((2 * (t - v.a)) / (v.b - v.a) - 1)));
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -148,6 +183,14 @@ function espessuras(seq, t, lado = '-', S = RETA) {
     }
     i = j;
   }
+  // ajustes verticais: o contato entre duas camadas sobe ou desce entre os furos,
+  // uma engrossa e a outra afina; terreno e fundo continuam no lugar
+  (seq.verticais || []).forEach((v) => {
+    if (!v.desloc) return;
+    const ef = clamp(v.desloc * bossaV(v, t, S), -h[v.j], h[v.k]);
+    h[v.j] += ef; h[v.k] -= ef;
+    if (t === v.tm) v.efetivo = ef;
+  });
   return h;
 }
 
@@ -221,7 +264,12 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
       continue;
     }
     const seq = sequenciaDoVao(A, B, ajustes);
-    const ts = [...new Set([0, 0.5, 1, ...(suave ? grade : []), ...seq.filter((s) => s.tipo !== 'M').map((s) => s.ponta)])].sort((a, b) => a - b);
+    // posição da alça vertical: o meio do trecho, ou um pouco ao lado se uma alça de acunhamento estiver lá
+    const pontasT = seq.filter((s) => s.tipo !== 'M').map((s) => s.ponta);
+    seq.verticais.forEach((v) => {
+      v.tH = [0.5, 0.3, 0.7].map((f) => v.a + f * (v.b - v.a)).find((t) => !pontasT.some((p) => Math.abs(p - t) < 0.08)) ?? v.tm;
+    });
+    const ts = [...new Set([0, 0.5, 1, ...(suave ? grade : []), ...pontasT, ...seq.verticais.flatMap((v) => [v.a, v.tm, v.b, v.tH])])].sort((a, b) => a - b);
     const pilha = (t, lado) => empilhar(seq, topo(t), t, lado, S);
     const cache = new Map(ts.flatMap((t) => [[`${t}-`, pilha(t, '-')], [`${t}+`, pilha(t, '+')]]));
     seq.forEach((it, k) => {
@@ -237,6 +285,12 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
         const tp = it.ponta, c = cache.get(`${tp}${lado}`)[k].topo;
         pontas.push({ chave: it.chave, d: D(tp), c, ponta: tp, padrao: it.padrao, tipo: it.tipo, vao: [dA, dB], codigo: it.l.solo.code });
       }
+    });
+    // alça vertical de cada contato (`fator` = quanto o contato anda na alça em relação ao meio do trecho)
+    seq.verticais.forEach((v) => {
+      const lado = seq[v.k].tipo === 'B' ? '+' : '-';
+      const c = cache.get(`${v.tH}${lado}`)[v.k].topo;
+      pontas.push({ chave: v.chave, d: D(v.tH), c, ponta: v.efetivo ?? 0, padrao: 0, tipo: 'V', vao: [dA, dB], codigo: seq[v.k].l.solo.code, fator: bossaV(v, v.tH, S) || 1 });
     });
     // alça de cada transição lateral, no meio do trecho
     const grupos = [...new Set(seq.filter((it) => it.grupo).map((it) => it.grupo))];

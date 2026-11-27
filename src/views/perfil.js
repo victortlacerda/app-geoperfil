@@ -76,6 +76,16 @@ export function criarPerfil(app) {
     renderCanvas(ctx, itens, MM, [PML, PMT, PML + ppW(), PMT + ppH()]);
     if (o.editar && app.corteAtivo()?.modo !== 'degrau') geo.pontas.forEach((pt) => {
       const x = pwx(pt.d), y = pwy(pt.c), mexida = Math.abs(pt.ponta - pt.padrao) > 1e-6, ativa = arrasteP?.chave === pt.chave;
+      if (pt.tipo === 'V') {
+        // alça vertical: círculo com setas para cima e para baixo
+        ctx.save(); ctx.fillStyle = ativa || mexida ? ACCENT : '#fff'; ctx.strokeStyle = ACCENT; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = ACCENT;
+        [[-1, y - 8], [1, y + 8]].forEach(([s, yy]) => { ctx.beginPath(); ctx.moveTo(x - 4, yy); ctx.lineTo(x + 4, yy); ctx.lineTo(x, yy + s * 5); ctx.closePath(); ctx.fill(); });
+        if (ativa) { ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000';
+          ctx.fillText(`${pt.ponta >= 0 ? '↓' : '↑'} ${Math.abs(pt.ponta).toFixed(2).replace('.', ',')} m`, x + 10, y); }
+        ctx.restore(); return;
+      }
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4);
       ctx.fillStyle = ativa || mexida ? ACCENT : '#fff'; ctx.strokeStyle = ACCENT; ctx.lineWidth = 1.5;
       ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10);
@@ -132,7 +142,7 @@ export function criarPerfil(app) {
   canvas.addEventListener('mousedown', (e) => {
     const [cx, cy] = xyCanvas(e);
     const pt = pontaEm(cx, cy);
-    if (pt) { arrasteP = { chave: pt.chave, vao: pt.vao, tipo: pt.tipo, t: pt.ponta, padrao: pt.padrao }; e.preventDefault(); return; }
+    if (pt) { arrasteP = { chave: pt.chave, vao: pt.vao, tipo: pt.tipo, t: pt.ponta, padrao: pt.padrao, y0: cy, t0: pt.ponta }; e.preventDefault(); return; }
     if (o.zoom > 1) { cDrag = { x: e.clientX, p: o.panX }; canvas.style.cursor = 'grabbing'; }
   });
   canvas.addEventListener('dblclick', (e) => {
@@ -140,11 +150,21 @@ export function criarPerfil(app) {
     const pt = pontaEm(cx, cy), corte = app.corteAtivo();
     if (!pt || !corte) return;
     app.store.commit((d) => { const c = d.cortes.find((q) => q.id === corte.id); if (c.ajustes) delete c.ajustes[pt.chave]; });
-    app.toast('Acunhamento voltou ao padrão.');
+    app.toast(pt.tipo === 'V' ? 'Contato voltou à interpolação entre os furos.' : 'Acunhamento voltou ao padrão.');
   });
   window.addEventListener('mousemove', (e) => {
     if (!arrasteP) return;
-    const [cx] = xyCanvas(e);
+    const [cx, cy] = xyCanvas(e);
+    if (arrasteP.tipo === 'V') {
+      // para baixo = contato desce (camada de cima engrossa, a de baixo afina)
+      const mPorPx = (ext.maxCota - ext.minCota || 1) / (ppH() || 1) / (geo.pontas.find((p) => p.chave === arrasteP.chave)?.fator || 1);
+      arrasteP.t = +(arrasteP.t0 + (cy - arrasteP.y0) * mPorPx).toFixed(2);
+      draw();
+      // limita ao que as duas camadas permitem
+      const ef = geo.pontas.find((p) => p.chave === arrasteP.chave)?.ponta;
+      if (ef !== undefined && Math.abs(ef - arrasteP.t) > 0.005) { arrasteP.t = ef; arrasteP.t0 = ef; arrasteP.y0 = cy; }
+      return;
+    }
     const dist = dIni() + o.panX + ((cx - PML) / (ppW() || 1)) * (span() / o.zoom);
     const [dA, dB] = arrasteP.vao;
     let t = (dist - dA) / (dB - dA || 1);
@@ -180,7 +200,8 @@ export function criarPerfil(app) {
   canvas.addEventListener('mousemove', (e) => {
     if (cDrag) return;
     const r = canvas.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
-    canvas.style.cursor = pontaEm(cx, cy) || arrasteP ? 'ew-resize' : o.zoom > 1 ? 'grab' : 'default';
+    const alca = arrasteP || pontaEm(cx, cy);
+    canvas.style.cursor = alca ? (alca.tipo === 'V' ? 'ns-resize' : 'ew-resize') : o.zoom > 1 ? 'grab' : 'default';
     const out = document.getElementById('sb-cursor');
     if (bhs.length < 2 || cx < PML || cx > PML + ppW() || cy < PMT || cy > PMT + ppH()) { out.textContent = ''; return; }
     const dist = dIni() + o.panX + ((cx - PML) / (ppW() || 1)) * (span() / o.zoom);

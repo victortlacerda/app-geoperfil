@@ -54,7 +54,27 @@ describe('geometria interpolada', () => {
     expect(Math.max(...arga.pts.map(([d]) => d))).toBeCloseTo(20);
     const ponta = cotaEm(arga.pts, 20);
     expect(Math.max(...ponta) - Math.min(...ponta)).toBeCloseTo(0);
-    expect(g.pontas.map((p) => p.codigo)).toEqual(['ARGA']);
+    expect(g.pontas.filter((p) => p.tipo !== 'V').map((p) => p.codigo)).toEqual(['ARGA']);
+    // alças verticais: ARGA sob ARGS; SAR sob ARGA (até a ponta) e sob ARGS (depois); ARE sob SAR
+    expect(g.pontas.filter((p) => p.tipo === 'V').map((p) => p.codigo)).toEqual(['ARGA', 'SAR', 'SAR', 'ARE']);
+  });
+
+  it('ajuste vertical: o contato sobe ou desce no meio do vão e fica igual nos furos', () => {
+    const chave = g.pontas.find((p) => p.tipo === 'V' && p.codigo === 'ARE').chave;
+    const base = geometriaPerfil([A, B]);
+    const mexido = geometriaPerfil([A, B], { ajustes: { [chave]: 1.5 } });
+    const topoARE = (geo, d) => Math.max(...cotaEm(geo.poligonos.find((p) => p.solo.code === 'ARE').pts, d));
+    expect(topoARE(mexido, 0)).toBeCloseTo(topoARE(base, 0));
+    expect(topoARE(mexido, 40)).toBeCloseTo(topoARE(base, 40));
+    expect(topoARE(mexido, 20)).toBeCloseTo(topoARE(base, 20) - 1.5); // desceu 1,5 m no meio
+    expect(mexido.pontas.find((p) => p.chave === chave).ponta).toBeCloseTo(1.5);
+    // terreno e fundo não mudam
+    const fundo = (geo) => Math.min(...cotaEm(geo.poligonos.find((p) => p.solo.code === 'ARE').pts, 20));
+    expect(fundo(mexido)).toBeCloseTo(fundo(base));
+    // não passa da espessura da camada de baixo
+    const demais = geometriaPerfil([A, B], { ajustes: { [chave]: 50 } });
+    expect(topoARE(demais, 20)).toBeCloseTo(fundo(base));
+    expect(demais.pontas.find((p) => p.chave === chave).ponta).toBeLessThan(50);
   });
 
   it('o fundo do perfil liga os fundos dos furos, e as áreas batem com as espessuras', () => {
