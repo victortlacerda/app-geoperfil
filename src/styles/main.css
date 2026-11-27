@@ -205,3 +205,7 @@ button,input,select{font-family:var(--f)}
 .planta-wrap canvas{z-index:1}
 .planta-wrap.com-mapa{background:#dfe6ec}
 .leaflet-container{font-family:var(--f)}
+.mnota{font-size:11px;color:var(--tx2);margin:-4px 0 10px}
+.mchk{display:flex;align-items:center;gap:6px;font-size:12px;margin:6px 0 4px}
+.dref{align-items:center;gap:6px;margin-bottom:6px}
+.dref .mfield{margin-bottom:0}

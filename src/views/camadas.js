@@ -13,7 +13,8 @@ const corN = (n) => (n >= 50 ? PERIGO : n >= 35 ? ALERTA : n >= 15 ? ACCENT : OK
 const fmt = (v) => (+v.toFixed(2)).toString().replace('.', ',');
 
 /** Colunas editáveis, na ordem em que aparecem (usadas para navegar e colar). */
-export const colunasEditaveis = (modo) => ['codigo', 'origem', 'desc', ...(modo === 'golpes' ? ['g0', 'g1', 'g2'] : ['spt'])];
+// rec e rqd só nos furos marcados como sondagem mista (trechos de rotativa)
+export const colunasEditaveis = (modo, mista = false) => ['codigo', 'origem', 'desc', ...(modo === 'golpes' ? ['g0', 'g1', 'g2'] : ['spt']), ...(mista ? ['rec', 'rqd'] : [])];
 
 /**
  * Aplica um valor digitado em uma célula. Retorna mensagem de erro ou null.
@@ -27,9 +28,14 @@ export function aplicarCelula(f, m, col, texto) {
     setCampoMetro(f, m, 'codigo', c);
   } else if (col === 'origem') {
     const o = resolverOrigem(v);
-    if (o === null) return `"${v}" não é uma classificação secundária conhecida (Aterro, Solo residual, Rocha fraturada, Rocha sã ou "-").`;
+    if (o === null) return `"${v}" não é uma classificação secundária conhecida (${SEC.filter((s) => s.value).map((s) => s.label).join(', ')} ou "-").`;
     setCampoMetro(f, m, 'origem', o);
   } else if (col === 'desc') setCampoMetro(f, m, 'desc', v);
+  else if (col === 'rec' || col === 'rqd') {
+    const p = v.replace('%', '').replace(',', '.').trim();
+    if (p && !(Number.isFinite(+p) && +p >= 0 && +p <= 100)) return `"${v}" não é uma porcentagem válida (0 a 100).`;
+    setCampoMetro(f, m, col, p ? String(+p) : '');
+  }
   else if (col === 'spt' || /^g[012]$/.test(col)) {
     const limpo = v.replace(/\s+/g, '');
     if (!textoSPTValido(limpo)) return `"${v}" não é um valor de SPT válido (use 12 ou 30/12).`;
@@ -41,7 +47,7 @@ export function aplicarCelula(f, m, col, texto) {
 
 /** Cola um bloco de texto (linhas × colunas, separado por tab) a partir de uma célula. */
 export function colarBloco(f, m0, col0, texto, modo) {
-  const cols = colunasEditaveis(modo);
+  const cols = colunasEditaveis(modo, !!f.mista);
   const c0 = cols.indexOf(col0);
   const linhas = texto.replace(/\r/g, '').split('\n');
   while (linhas.length && linhas.at(-1).trim() === '') linhas.pop();
@@ -224,14 +230,15 @@ export function criarCamadas(app) {
     if (geo) { const g = utmParaGeo(f.x, f.y, app.store.doc.projeto.fusoUTM); set('infoLat', g.lat.toFixed(7)); set('infoLon', g.lon.toFixed(7)); }
     document.getElementById('btn-modo-metro').classList.toggle('active', modo() === 'metro');
     document.getElementById('btn-modo-golpes').classList.toggle('active', modo() === 'golpes');
+    document.getElementById('btn-mista').classList.toggle('active', !!f.mista);
   }
 
   function renderGrade(f) {
     const golpes = modo() === 'golpes';
     head.innerHTML = `<tr><th>Prof.</th><th>Primária</th><th>Secundária</th><th>Descrição</th>${golpes
       ? '<th title="Golpes nos 1ºs 15 cm">1º 15</th><th title="Golpes nos 2ºs 15 cm">2º 15</th><th title="Golpes nos 3ºs 15 cm">3º 15</th><th>N</th>'
-      : '<th>N-SPT</th>'}<th></th><th></th></tr>`;
-    const cols = `<colgroup><col class="c-m"><col class="c-cls"><col class="c-sec"><col>${golpes ? '<col class="c-g"><col class="c-g"><col class="c-g"><col class="c-n">' : '<col class="c-n">'}<col class="c-bar"><col class="c-del"></colgroup>`;
+      : '<th>N-SPT</th>'}${f.mista ? '<th title="Recuperação nos trechos de rotativa">REC %</th><th title="RQD nos trechos de rotativa">RQD %</th>' : ''}<th></th><th></th></tr>`;
+    const cols = `<colgroup><col class="c-m"><col class="c-cls"><col class="c-sec"><col>${golpes ? '<col class="c-g"><col class="c-g"><col class="c-g"><col class="c-n">' : '<col class="c-n">'}${f.mista ? '<col class="c-n"><col class="c-n">' : ''}<col class="c-bar"><col class="c-del"></colgroup>`;
     const old = document.querySelector('#grid colgroup'); if (old) old.remove();
     head.insertAdjacentHTML('beforebegin', cols);
 
@@ -252,6 +259,7 @@ export function criarCamadas(app) {
         <td class="cls-cell sem-sw"><input data-col="origem" data-key="origem:${l.m}" list="dl-sec" value="${esc(origemTxt)}" placeholder="${l.origemHerdada ? esc(secLabel(l.origem)) : ''}" autocomplete="off"/><span class="fill-handle" data-handle="origem" title="Arraste para copiar"></span></td>
         <td><input data-col="desc" data-key="desc:${l.m}" value="${esc(r.desc ?? '')}"/></td>
         ${sptCell}
+        ${f.mista ? ['rec', 'rqd'].map((c) => `<td><input data-col="${c}" data-key="${c}:${l.m}" value="${esc(r[c] ?? '')}" placeholder="—" inputmode="decimal"/></td>`).join('') : ''}
         <td class="bar-cell">${n ? `<div class="spt-bw"><div class="spt-b" style="width:${Math.min(n.valor / 50, 1) * 100}%;background:${corN(n.valor)}"></div></div>` : ''}</td>
         <td class="del-cell"><button class="del-btn-r" data-limpar="${l.m}" title="${r.m ? `Apagar o que foi digitado no ${l.m} m` : l.m === linhas.length ? `Remover a linha do ${l.m} m` : 'Metro vazio'}">✕</button></td>
       </tr>`;

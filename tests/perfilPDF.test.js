@@ -22,7 +22,7 @@ describe('PDF do perfil', () => {
     expect(pdf.getNumberOfPages()).toBe(1);
     const txt = new TextDecoder('latin1').decode(pdf.output('arraybuffer'));
     expect(txt).toContain('PERFIL GEOT');
-    expect(txt).toMatch(/1:500/);
+    expect(txt).toMatch(/1:(500|750)/); // a folga nas pontas pode pedir a escala seguinte
     expect(txt).toContain('SP-03');
   });
 

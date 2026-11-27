@@ -1,5 +1,5 @@
 // Leitura e gravação do arquivo de projeto (.json).
-import { VERSAO, novoFuro, novoProjeto, num, uid } from './projeto.js';
+import { VERSAO, novoFuro, novoProjeto, num, uid, estiloPadrao } from './projeto.js';
 
 /** Valida e normaliza um projeto lido de JSON. Lança erro se o formato não for reconhecido. */
 export function carregarProjeto(dados) {
@@ -9,6 +9,10 @@ export function carregarProjeto(dados) {
   p.projeto = { ...p.projeto, ...(dados.projeto || {}) };
   if (p.projeto.modoSPT !== 'golpes') p.projeto.modoSPT = 'metro';
   if (p.projeto.crs !== 'utm') p.projeto.crs = 'local';
+  p.projeto.estilo = estiloPadrao(dados.projeto?.estilo || {});
+  p.projeto.naProjeto = Number.isFinite(+dados.projeto?.naProjeto) && dados.projeto?.naProjeto !== null && dados.projeto?.naProjeto !== '' ? +dados.projeto.naProjeto : null;
+  p.projeto.referencias = (Array.isArray(dados.projeto?.referencias) ? dados.projeto.referencias : [])
+    .filter((r) => r && Number.isFinite(+r.cota)).map((r) => ({ nome: String(r.nome || 'Referência').slice(0, 80), cota: +r.cota }));
   if (!['mapa', 'satelite', 'nenhum'].includes(p.projeto.fundo)) p.projeto.fundo = 'mapa';
   p.cores = Object.fromEntries(Object.entries(dados.cores || {}).filter(([, v]) => /^#[0-9a-f]{6}$/i.test(String(v))));
   p.furos = (dados.furos || []).map((f) => novoFuro(f));

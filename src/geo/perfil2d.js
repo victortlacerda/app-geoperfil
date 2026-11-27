@@ -190,7 +190,8 @@ export function pchip(pts) {
  *   suave: terreno e NA em curva pelos furos (sem ultrapassar os valores), espessuras
  *   variando de forma suave e cunhas com ponta arredondada; o resto como no interpolado
  * @returns { poligonos, pontas, terreno, na, fundo, ext, totDist }
- *   poligonos: [{ solo, sec, pts: [[dist, cota]], rotulo: { d, c, h } }]
+ *   poligonos: [{ solo, sec, pts: [[dist, cota]], nTopo, rotulo: { d, c, h } }] — os nTopo primeiros
+ *     pontos são o contato de topo da camada, da esquerda para a direita
  *   pontas: [{ chave, d, c, padrao, ponta, vao }] — alças de acunhamento editáveis
  */
 export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}) {
@@ -213,7 +214,7 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
     if (modo === 'degrau') {
       const xm = (dA + dB) / 2;
       buildZones(A, B).forEach((z) => {
-        const ret = (x0, x1, l) => poligonos.push({ solo: l.solo, sec: l.sec, pts: [[x0, z.cTop], [x1, z.cTop], [x1, z.cBot], [x0, z.cBot]], rotulo: { d: (x0 + x1) / 2, c: (z.cTop + z.cBot) / 2, h: z.cTop - z.cBot } });
+        const ret = (x0, x1, l) => poligonos.push({ solo: l.solo, sec: l.sec, pts: [[x0, z.cTop], [x1, z.cTop], [x1, z.cBot], [x0, z.cBot]], nTopo: 2, rotulo: { d: (x0 + x1) / 2, c: (z.cTop + z.cBot) / 2, h: z.cTop - z.cBot } });
         if (z.sameP && z.sameS) ret(dA, dB, z.lA);
         else { if (z.lA) ret(dA, xm, z.lA); if (z.lB) ret(xm, dB, z.lB); }
       });
@@ -231,7 +232,7 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
       const baixo = tt.map((t) => [D(t), cache.get(`${t}${lado}`)[k].base]).reverse();
       const tm = it.tipo === 'M' ? 0.5 : (t0 + t1) / 2;
       const em = pilha(tm, lado)[k];
-      if (it.l.solo) poligonos.push({ solo: it.l.solo, sec: it.l.sec, pts: [...cima, ...baixo], rotulo: { d: D(tm), c: (em.topo + em.base) / 2, h: em.topo - em.base } });
+      if (it.l.solo) poligonos.push({ solo: it.l.solo, sec: it.l.sec, pts: [...cima, ...baixo], nTopo: cima.length, rotulo: { d: D(tm), c: (em.topo + em.base) / 2, h: em.topo - em.base } });
       if (it.tipo !== 'M' && it.l.solo && !it.grupo) {
         const tp = it.ponta, c = cache.get(`${tp}${lado}`)[k].topo;
         pontas.push({ chave: it.chave, d: D(tp), c, ponta: tp, padrao: it.padrao, tipo: it.tipo, vao: [dA, dB], codigo: it.l.solo.code });

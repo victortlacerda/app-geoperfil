@@ -1,6 +1,6 @@
 import './styles/main.css';
 import { criarStore, lerAutosave } from './store.js';
-import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num, camadasDoFuro } from './model/projeto.js';
+import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num, camadasDoFuro, estiloPadrao } from './model/projeto.js';
 import { carregarProjeto, serializar } from './model/arquivo.js';
 import { furosNoCorte } from './geo/corte.js';
 import { criarPlanta } from './views/planta.js';
@@ -95,7 +95,7 @@ function render() {
   });
   if (ui.view === 'planta') planta.draw();
   if (ui.view === 'camadas') camadas.render();
-  if (ui.view === 'perfil') { botoesModo(); perfil.draw(); }
+  if (ui.view === 'perfil') { botoesModo(); botoesEstilo(); perfil.draw(); }
   if (ui.view === '3d') abrir3D();
   else modelo3d?.render();
 }
@@ -119,6 +119,36 @@ document.querySelectorAll('[data-m3d]').forEach((el) => el.addEventListener('cha
   if (el.dataset.m3d === 'cortar') modelo3d?.reenquadrar();
   modelo3d?.render();
 }));
+/** Botões e seleção de estilo do perfil refletem o projeto e a tela. */
+function botoesEstilo() {
+  const e = estiloPadrao(store.doc.projeto.estilo || {});
+  $('btn-lab').classList.toggle('active', e.rotulos); $('btn-hatch').classList.toggle('active', e.hachura);
+  $('btn-na').classList.toggle('active', ui.perfil.showNA); $('btn-spt').classList.toggle('active', ui.perfil.showSPT);
+  $('selCor').value = e.cor;
+}
+$('selCor').addEventListener('change', () => {
+  const cor = $('selCor').value;
+  store.commit((d) => { d.projeto.estilo = { ...estiloPadrao(d.projeto.estilo || {}), cor }; });
+});
+function linhaReferencia(r = { nome: '', cota: '' }) {
+  const div = document.createElement('div');
+  div.className = 'mrow dref';
+  div.innerHTML = `<div class="mfield"><input class="dRefNome" placeholder="ex.: Fundo de escavação" /></div><div class="mfield" style="max-width:120px"><input class="dRefCota" type="number" step="0.01" placeholder="cota" /></div><button type="button" class="t-btn" title="Remover">✕</button>`;
+  div.querySelector('.dRefNome').value = r.nome; div.querySelector('.dRefCota').value = r.cota;
+  div.querySelector('button').addEventListener('click', () => div.remove());
+  $('dRefs').appendChild(div);
+}
+$('dAddRef').addEventListener('click', () => linhaReferencia());
+$('desForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const na = $('dNA').value.trim() === '' ? null : num($('dNA').value);
+  const refs = [...document.querySelectorAll('#dRefs .dref')].map((d) => ({ nome: d.querySelector('.dRefNome').value.trim() || 'Referência', cota: d.querySelector('.dRefCota').value }))
+    .filter((r) => r.cota !== '' && Number.isFinite(+r.cota)).map((r) => ({ ...r, cota: +r.cota }));
+  const spt30 = $('dSpt30').checked;
+  store.commit((d) => { d.projeto.naProjeto = na; d.projeto.referencias = refs; d.projeto.estilo = { ...estiloPadrao(d.projeto.estilo || {}), spt30 }; });
+  fecharModais();
+});
+
 /** Botões Interpolado / Suave / Degrau refletem o modo do corte ativo. */
 function botoesModo() {
   const m = app.corteAtivo()?.modo || 'interpolado';
@@ -297,6 +327,10 @@ const acoes = {
   },
   novoFuro() { abrirModalFuro(); },
   modoSPT(m) { store.commit((d) => { d.projeto.modoSPT = m; }); },
+  mista() {
+    const f = app.furoAtual(); if (!f) return;
+    store.commit((d) => { const q = d.furos.find((x) => x.id === f.id); if (q.mista) delete q.mista; else q.mista = true; });
+  },
   maisMetro() { camadas.maisMetro(); },
   menosMetro() { camadas.menosMetro(); },
   restaurarCores() { camadas.restaurarCores(); },
@@ -314,9 +348,19 @@ const acoes = {
   ajustar() { planta.ajustar(); },
   axis(m) { ui.perfil.axis = m; $('btn-cota').classList.toggle('active', m === 'cota'); $('btn-prof').classList.toggle('active', m === 'prof'); perfil.draw(); },
   opt(k) {
+    // rótulos e hachuras são do estilo do projeto (valem no PDF e no DXF); NA e SPT são só da tela
+    const doEstilo = { showLab: 'rotulos', showHatch: 'hachura' }[k];
+    if (doEstilo) { store.commit((d) => { const e = estiloPadrao(d.projeto.estilo || {}); e[doEstilo] = !e[doEstilo]; d.projeto.estilo = e; }); return; }
     ui.perfil[k] = !ui.perfil[k];
-    const ids = { showNA: 'btn-na', showLab: 'btn-lab', showSPT: 'btn-spt', showHatch: 'btn-hatch' };
-    $(ids[k]).classList.toggle('active', ui.perfil[k]); perfil.draw();
+    botoesEstilo(); perfil.draw();
+  },
+  dialogoDesenho() {
+    const p = store.doc.projeto;
+    $('dNA').value = p.naProjeto ?? '';
+    $('dSpt30').checked = !!p.estilo?.spt30;
+    $('dRefs').innerHTML = '';
+    (p.referencias || []).forEach((r) => linhaReferencia(r));
+    $('desModal').classList.add('open');
   },
   zoom(d) { perfil.zoomDelta(+d); },
   zoomFit() { perfil.zoomFit(); },

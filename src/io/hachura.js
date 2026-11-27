@@ -55,6 +55,8 @@ export function hachuraZona(x0, y0, x1, y1, solo, sec, esc = 1) {
   else if (sec === 'RES') lin(135, 2.0);
   else if (sec === 'RFR') { lin(45, 1.2); lin(135, 1.2); }
   else if (sec === 'RSA') lin(0, 0.4);
+  else if (sec === 'COL') lin(60, 1.6);
+  else if (sec === 'RAL') { lin(30, 1.4); }
   return { linhas: L, pontos: P };
 }
 

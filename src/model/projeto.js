@@ -22,7 +22,8 @@ export function num(v, padrao = 0) {
   return Number.isFinite(n) ? n : padrao;
 }
 
-const CAMPOS_METRO = ['codigo', 'origem', 'desc', 'spt'];
+// rec e rqd: recuperação e RQD (%) nos trechos de sondagem rotativa (sondagem mista)
+const CAMPOS_METRO = ['codigo', 'origem', 'desc', 'spt', 'rec', 'rqd'];
 
 function normalizarMetro(r) {
   const o = { m: Math.round(num(r.m, 0)) };
@@ -42,6 +43,7 @@ export function novoFuro(d = {}) {
     na: num(d.na, 0),
     profTotal: num(d.profTotal, 0),
     parada: d.parada || '',
+    ...(d.mista ? { mista: true } : {}),
     metros: (d.metros || []).map(normalizarMetro).filter((r) => r.m >= 1 && !metroVazio(r)).sort((a, b) => a.m - b.m),
   };
   if (!d.metros && Array.isArray(d.camadas)) aplicarCamadas(f, d.camadas);
@@ -50,14 +52,28 @@ export function novoFuro(d = {}) {
 }
 
 export function novoProjeto(nome = 'Novo projeto') {
-  return { version: VERSAO, projeto: { nome, crs: 'local', fusoUTM: '23S', fundo: 'mapa', modoSPT: 'metro' }, cores: {}, furos: [], cortes: [] };
+  return { version: VERSAO, projeto: { nome, crs: 'local', fusoUTM: '23S', fundo: 'mapa', modoSPT: 'metro', estilo: estiloPadrao(), naProjeto: null, referencias: [] }, cores: {}, furos: [], cortes: [] };
+}
+
+/**
+ * Estilo do desenho do perfil (vale na tela, no PDF, no DXF e no 3D):
+ * cor 'textura' (classificação primária) ou 'horizonte' (origem: aterro, colúvio,
+ * solo residual, rocha…), hachura, rótulos nas camadas e N-SPT como golpes/30 cm.
+ */
+export function estiloPadrao(e = {}) {
+  return {
+    cor: e.cor === 'horizonte' ? 'horizonte' : 'textura',
+    hachura: e.hachura !== false,
+    rotulos: e.rotulos !== false,
+    spt30: !!e.spt30,
+  };
 }
 
 // ── edição de metros ─────────────────────────────────────
 
 export const getMetro = (f, m) => f.metros.find((r) => r.m === m);
 
-/** Define (ou apaga, com valor vazio) um campo de um metro. campo: codigo|origem|desc|spt|g0|g1|g2. */
+/** Define (ou apaga, com valor vazio) um campo de um metro. campo: codigo|origem|desc|spt|rec|rqd|g0|g1|g2. */
 export function setCampoMetro(f, m, campo, valor) {
   if (!(m >= 1)) return;
   let r = getMetro(f, m);
@@ -207,11 +223,16 @@ export function proximoNome(furos) {
 }
 
 /** Forma usada pelos desenhos de perfil e DXF. */
+/** { metro: valor } de um campo opcional (rec, rqd). */
+export const valoresMetro = (f, campo) => Object.fromEntries(f.metros.filter((r) => r[campo] !== undefined).map((r) => [r.m, r[campo]]));
+
 export function resolverFuro(f) {
   return {
     id: f.id, name: f.nome, x: f.x, y: f.y, cota: f.cota, na: f.na, profTotal: profMax(f),
     layers: camadasDoFuro(f).map((c) => ({ de: c.de, ate: c.ate, solo: solo(c.codigo), sec: c.origem, descricao: c.descricao })),
     spt: sptPorMetro(f), sptTexto: sptTextos(f),
+    // trechos de rotativa: recuperação e RQD (%) por metro
+    mista: !!f.mista, rec: valoresMetro(f, 'rec'), rqd: valoresMetro(f, 'rqd'),
     imp: ehImpenetravel(f.parada), parada: f.parada,
   };
 }

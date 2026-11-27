@@ -12,7 +12,8 @@
 //    As camadas são empilhadas do terreno para baixo, então nunca se cruzam.
 // 4. Malha regular sobre um retângulo que envolve as colunas com uma margem.
 import { Delaunay } from 'd3-delaunay';
-import { camadasDoFuro, profMax } from '../model/projeto.js';
+import { camadasDoFuro, profMax, resolverFuro } from '../model/projeto.js';
+import { camadasDesenho } from './horizontes.js';
 import { perfilDoCorte } from './corte.js';
 import { geometriaPerfil } from './perfil2d.js';
 
@@ -184,9 +185,15 @@ function juntar(cam) {
   }, []).filter((c) => c.esp > 1e-6);
 }
 
-/** Furo → coluna { id, x, y, cota, na (cota do NA ou null), cam: [{ codigo, origem, esp }] }. */
-export function colunaDoFuro(f) {
-  const cam = juntar(camadasDoFuro(f).filter((c) => c.ate > c.de).map((c) => ({ codigo: c.codigo, origem: c.origem || '', esp: c.ate - c.de })));
+/**
+ * Furo → coluna { id, x, y, cota, na (cota do NA ou null), cam: [{ codigo, origem, esp }], blocos }.
+ * As camadas são as mesmas do Perfil 2D (geo/horizontes.js): pedregulho/blocos vira
+ * bloco solto e, com porHorizonte, a unidade é o horizonte (aterro, colúvio…).
+ */
+export function colunaDoFuro(f, { porHorizonte = false } = {}) {
+  const { layers, blocos } = camadasDesenho(resolverFuro(f).layers, { porHorizonte });
+  const cam = juntar(layers.filter((c) => c.ate > c.de).map((c) => ({ codigo: c.solo.code, origem: c.sec || '', esp: c.ate - c.de })));
+  if (blocos.length) return { id: f.id, nome: f.nome, x: f.x, y: f.y, cota: f.cota, na: f.na > 0 ? f.cota - f.na : null, cam, real: true, blocos };
   return { id: f.id, nome: f.nome, x: f.x, y: f.y, cota: f.cota, na: f.na > 0 ? f.cota - f.na : null, cam, real: true };
 }
 
@@ -218,8 +225,8 @@ function corteVertical(pts, d) {
  * de acunhamento, transições) e a cada trecho do vão. Assim o 3D reproduz o 2D
  * na linha de cada corte.
  */
-export function colunasDoCorte(corte, furos) {
-  const bhs = perfilDoCorte(corte, furos);
+export function colunasDoCorte(corte, furos, { porHorizonte = false } = {}) {
+  const bhs = perfilDoCorte(corte, furos, { porHorizonte });
   if (bhs.length < 2) return [];
   // o modo do corte (reta, suave ou degrau) vale também no 3D
   const geo = geometriaPerfil(bhs, { ajustes: corte.ajustes || {}, modo: corte.modo || 'interpolado' });
@@ -242,7 +249,7 @@ export function colunasDoCorte(corte, furos) {
     const na = geo.na.length > 1 ? interpLinha(geo.na, d) : null;
     // na posição do furo, as camadas do próprio furo (ali os polígonos dos dois
     // lados encostam na mesma vertical e seriam contados duas vezes)
-    if (b) { const c = colunaDoFuro(porId.get(b.id)); return { ...c, ...pos, id: `${corte.id}@${d}`, corte: corte.id, furo: b.id, real: false, na: c.na ?? na }; }
+    if (b) { const c = colunaDoFuro(porId.get(b.id), { porHorizonte }); delete c.blocos; return { ...c, ...pos, id: `${corte.id}@${d}`, corte: corte.id, furo: b.id, real: false, na: c.na ?? na }; }
     const topo = interpLinha(geo.terreno, d);
     if (topo == null) return null;
     let cam = camadasEm(d);
@@ -350,15 +357,15 @@ export function dominio(pontos, { margem } = {}) {
  *   naMalha(x, y) → { contatos, na }   // bilinear na malha (coerente com o desenho)
  * }
  */
-export function modeloBloco(furosTodos, { cortes = [], resolucao = 100, margem } = {}) {
+export function modeloBloco(furosTodos, { cortes = [], resolucao = 100, margem, porHorizonte = false } = {}) {
   const furos = furosDoModelo(furosTodos);
   if (!furos.length) return null;
-  const reais = furos.map(colunaDoFuro);
+  const reais = furos.map((f) => colunaDoFuro(f, { porHorizonte }));
   const dom0 = dominio(reais, { margem });
   const dmin = Math.max(1, Math.hypot(dom0.x1 - dom0.x0, dom0.y1 - dom0.y0) * 0.01);
   const colunas = [...reais];
   cortes.forEach((corte) => {
-    const virt = colunasDoCorte(corte, furosTodos);
+    const virt = colunasDoCorte(corte, furosTodos, { porHorizonte });
     const ids = new Set(virt.map((v) => v.furo).filter(Boolean));
     const antes = colunas.length;
     virt.forEach((v) => {

@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { modeloBloco, linhaNoDominio } from '../geo/bloco3d.js';
 import { niceStep } from '../geo/zonas.js';
-import { camadasDoFuro, sptPorMetro, sptTextos, profMax } from '../model/projeto.js';
+import { sptPorMetro, sptTextos, profMax, resolverFuro } from '../model/projeto.js';
+import { camadasDesenho } from '../geo/horizontes.js';
 import { solo, secLabel } from '../model/catalogo.js';
 import { NA_COR } from '../styles/tema.js';
 
@@ -25,6 +26,7 @@ export function cor3D(code) {
 const GRAMA = 0x8fa66b, BASE = 0x8a8278, LINHA = 0x2b2b2b, AZUL = 0x1566d1;
 
 export function criarModelo3D(app) {
+  const porHorizonte = () => app.store.doc.projeto.estilo?.cor === 'horizonte';
   const wrap = document.getElementById('cena3d');
   const o = app.ui.m3d;
   let renderer;
@@ -234,12 +236,24 @@ export function criarModelo3D(app) {
 
   /** Furo em cilindros por camada; `s` = desenhado na face do corte (não é cortado). */
   function colunaFuro(f, x, y, tipo, raio) {
-    camadasDoFuro(f).forEach((c) => {
+    // as mesmas camadas do Perfil 2D (horizontes, blocos absorvidos)
+    const des = camadasDesenho(resolverFuro(f).layers, { porHorizonte: porHorizonte() });
+    // pedregulho / blocos: matacão cinza em volta do furo, como no 2D
+    des.blocos.forEach((b) => {
+      const h = b.ate - b.de; if (h <= 0) return;
+      const pedra = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), material('H:PED', tipo));
+      pedra.scale.set(Math.max(raio * 3.2, h * 0.8), h / 2, Math.max(raio * 2.6, h * 0.7));
+      pedra.rotation.y = (f.nome.length * 0.7) % Math.PI;
+      pedra.position.copy(P(x, y, f.cota - (b.de + b.ate) / 2));
+      comInfo(pedra, { code: 'H:PED', origem: 'PED', furo: f.nome });
+      raiz.add(pedra);
+    });
+    des.layers.forEach((c) => {
       const h = c.ate - c.de;
       if (h <= 0) return;
-      const cil = new THREE.Mesh(new THREE.CylinderGeometry(raio, raio, h, 18), material(c.codigo, tipo));
+      const cil = new THREE.Mesh(new THREE.CylinderGeometry(raio, raio, h, 18), material(c.solo.code, tipo));
       cil.position.copy(P(x, y, f.cota - (c.de + c.ate) / 2));
-      comInfo(cil, { code: c.codigo, origem: c.origem, furo: f.nome });
+      comInfo(cil, { code: c.solo.code, origem: c.sec, furo: f.nome });
       raiz.add(cil);
       raiz.add(linha([P(x, y, f.cota - c.ate), P(x, y, f.cota - c.ate)].map((v, i) => v.add(new THREE.Vector3(i ? raio * 1.6 : -raio * 1.6, 0, 0))), LINHA, tipo, 0.8));
     });
@@ -259,7 +273,7 @@ export function criarModelo3D(app) {
     const doc = app.store.doc, corte = app.corteAtivo();
     // o modelo usa os furos e o Perfil 2D de cada corte (com os contatos ajustados);
     // só é recalculado quando os dados mudam
-    if (doc !== docModelo) { modelo = modeloBloco(doc.furos, { cortes: doc.cortes }); docModelo = doc; }
+    if (doc !== docModelo) { modelo = modeloBloco(doc.furos, { cortes: doc.cortes, porHorizonte: porHorizonte() }); docModelo = doc; }
     const info = document.getElementById('m3dInfo');
     if (!modelo) { corteInfo = null; info.textContent = 'Lance furos com camadas para ver o modelo.'; renderLegenda(); return; }
     const dom = modelo.dominio, nU = modelo.unidades.length;
@@ -378,7 +392,7 @@ export function criarModelo3D(app) {
     document.getElementById('legenda3d').innerHTML = usados.length ? '<div class="leg-ttl">Camadas</div>' + usados.map((s) => `
       <div class="leg3d-row">
         <input type="checkbox" data-mostrar="${s.code}" ${o.ocultos.has(s.code) ? '' : 'checked'} title="Mostrar ou esconder"/>
-        <span class="leg-sw" style="background:#${cor3D(s.code).getHexString()}"></span><span class="leg3d-nome" title="${esc(s.label)}">${esc(s.code)}</span>
+        <span class="leg-sw" style="background:#${cor3D(s.code).getHexString()}"></span><span class="leg3d-nome" title="${esc(s.label)}">${esc(s.horizonte ? s.label : s.code)}</span>
         <input type="range" min="0.1" max="1" step="0.05" value="${o.opacidade[s.code] ?? 1}" data-opac="${s.code}" title="Transparência"/>
       </div>`).join('') : '';
   }
@@ -411,7 +425,7 @@ export function criarModelo3D(app) {
       const d = hit.object.userData;
       if (d.base) { dica.textContent = `Base do modelo · cota ${fmt(cota, 2)} m`; return; }
       const s = solo(d.code), sec = d.origem ? secLabel(d.origem) : '';
-      dica.textContent = `${s.code} — ${s.label.split('—').pop().trim()}${sec ? ` (${sec})` : ''}${d.furo ? ` · ${d.furo}` : ''} · cota ${fmt(cota, 2)} m`;
+      dica.textContent = `${s.horizonte ? s.label : `${s.code} — ${s.label.split('—').pop().trim()}${sec ? ` (${sec})` : ''}`}${d.furo ? ` · ${d.furo}` : ''} · cota ${fmt(cota, 2)} m`;
     });
   });
 

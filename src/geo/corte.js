@@ -1,5 +1,6 @@
 // Geometria do corte em planta. Coordenadas em metros.
 import { resolverFuro } from '../model/projeto.js';
+import { camadasDesenho } from './horizontes.js';
 
 /** Sinal do lado em que (px,py) está em relação à reta A→B (+1, −1 ou 0). */
 export function sideOfLine(px, py, ax, ay, bx, by) {
@@ -45,7 +46,11 @@ export function furosNoCorte(corte, furos) {
  * desenho do perfil, com `dist` = distância ao longo do corte (m),
  * contada a partir do primeiro furo.
  */
-export function perfilDoCorte(corte, furos) {
+/**
+ * Furos do corte, resolvidos e ordenados pela distância ao longo da linha.
+ * opcoes.porHorizonte: camadas pintadas por horizonte (ver geo/horizontes.js).
+ */
+export function perfilDoCorte(corte, furos, opcoes = {}) {
   if (!corte) return [];
   const [ax, ay] = corte.p1, [bx, by] = corte.p2;
   const len = comprimento(corte);
@@ -56,7 +61,10 @@ export function perfilDoCorte(corte, furos) {
     .sort((a, b) => a.t - b.t);
   if (!sel.length) return [];
   const t0 = sel[0].t;
-  return sel.map(({ f, t }) => ({ ...resolverFuro(f), dist: +(t - t0).toFixed(2) }));
+  return sel.map(({ f, t }) => {
+    const b = resolverFuro(f), { layers, blocos } = camadasDesenho(b.layers, opcoes);
+    return { ...b, layers, blocos, dist: +(t - t0).toFixed(2) };
+  });
 }
 
 /** Próximo nome de corte livre: A–A', B–B', ... */

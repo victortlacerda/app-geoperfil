@@ -20,6 +20,9 @@ export function escolherEscalas(comprimento, altura, larguraMm, alturaMm) {
   return { Eh, Ev, exagero: Eh / Ev };
 }
 
+/** Folga (m) antes do primeiro e depois do último furo: eles não ficam colados na moldura. */
+export const folgaPerfil = (totDist) => Math.max(2, totDist * 0.05);
+
 /**
  * Escalas e faixa de cotas do perfil para uma área de desenho (mm), com a
  * faixa arredondada à grade: a escala vertical sobe até tudo caber.
@@ -29,7 +32,7 @@ export function escalasPerfil(geo, bhs, larguraMm = 366, alturaMm = 195) {
   const fundoCota = Math.min(...geo.fundo.map(([, c]) => c));
   const topoCota = Math.max(...bhs.map((b) => b.cota));
   const altura = Math.max(topoCota - fundoCota, 0.5);
-  let { Eh, Ev } = escolherEscalas(geo.totDist, altura * 1.05, larguraMm, alturaMm - 8);
+  let { Eh, Ev } = escolherEscalas(geo.totDist + 2 * folgaPerfil(geo.totDist), altura * 1.05, larguraMm, alturaMm - 8);
   let passoC, cTopo, cBase;
   for (;;) {
     passoC = niceStep((alturaMm * Ev) / 1000 / 8);

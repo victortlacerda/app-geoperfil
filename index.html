@@ -104,6 +104,7 @@
         <span class="tlbl">Lançamento do SPT:</span>
         <button class="t-btn active" id="btn-modo-metro" data-action="modoSPT" data-arg="metro">Metro a metro</button>
         <button class="t-btn" id="btn-modo-golpes" data-action="modoSPT" data-arg="golpes">Golpes por 15 cm</button>
+        <button class="t-btn" id="btn-mista" data-action="mista" title="Sondagem mista: mostra as colunas REC % e RQD % para os trechos de rotativa">Mista (REC/RQD)</button>
         <div class="push"><button class="t-btn" data-action="boletimPDF">Boletim em PDF</button></div>
       </div>
       <div class="furo-head" id="furoHead">
@@ -218,6 +219,8 @@
         <button class="t-btn active" id="btn-lab" data-action="opt" data-arg="showLab">Rótulos</button>
         <button class="t-btn active" id="btn-spt" data-action="opt" data-arg="showSPT">SPT</button>
         <button class="t-btn active" id="btn-hatch" data-action="opt" data-arg="showHatch">Hachuras</button>
+        <select class="t-select" id="selCor" title="Colorir as camadas pela textura (classificação primária) ou pelo horizonte (aterro, colúvio, solo residual, rocha…)"><option value="textura">Cores: textura</option><option value="horizonte">Cores: horizonte</option></select>
+        <button class="t-btn" data-action="dialogoDesenho" title="NA de projeto, linhas de referência e formato do N-SPT">Desenho…</button>
         <div class="tsep"></div>
         <button class="t-btn active" id="btn-interp" data-action="modoPerfil" data-arg="interpolado" title="Contatos ligados em linha reta entre os furos, com acunhamento">Interpolado</button>
         <button class="t-btn" id="btn-suave" data-action="modoPerfil" data-arg="suave" title="Mesma interpretação, com terreno e contatos em curva (sem ultrapassar os valores dos furos)">Suave</button>
@@ -263,6 +266,24 @@
     </div>
     <div class="mbtns">
       <button type="submit" class="mbtn primary">Confirmar</button>
+      <button type="button" class="mbtn secondary" data-action="fecharModal">Cancelar</button>
+    </div>
+  </form>
+</div>
+
+<!-- MODAL: desenho do perfil -->
+<div class="modal-bg" id="desModal">
+  <form class="modal" id="desForm">
+    <h3>Desenho do perfil</h3>
+    <p class="mnota">Vale para todos os cortes: tela, PDF, DXF e prancha.</p>
+    <div class="mfield"><label for="dNA">Nível d'água de projeto (cota, m)</label><input id="dNA" type="number" step="0.01" placeholder="em branco: sem NA de projeto" /></div>
+    <div class="mfield"><label>Linhas de referência</label>
+      <div id="dRefs"></div>
+      <button type="button" class="t-btn" id="dAddRef">+ Linha de referência</button>
+    </div>
+    <label class="mchk"><input type="checkbox" id="dSpt30" /> N-SPT como golpes/30 cm (ex.: 12/30)</label>
+    <div class="mbtns">
+      <button type="submit" class="mbtn primary">Aplicar</button>
       <button type="button" class="mbtn secondary" data-action="fecharModal">Cancelar</button>
     </div>
   </form>
