@@ -2,7 +2,7 @@
 
 **Da sondagem SPT ao perfil geotécnico e ao modelo 3D do terreno, direto no navegador.**
 
-Lance os furos na planta, preencha o boletim metro a metro e trace o corte. O GeoPerfil correlaciona as camadas entre os furos, desenha o perfil 2D com hachuras e monta o bloco geológico em 3D. Tudo sai pronto para o projeto: PDF em A3 com carimbo, boletim individual em PDF e DXF para o CAD.
+Lance os furos na planta, preencha o boletim metro a metro e trace o corte. O GeoPerfil correlaciona as camadas entre os furos, desenha o perfil 2D com hachuras e monta o bloco geológico em 3D. Tudo sai pronto para o projeto: prancha A0 a A3 com vários cortes, planta-chave e carimbo, PDF do perfil em A3, boletim individual em PDF e DXF para o CAD.
 
 **[▶ Abrir o GeoPerfil](https://victortlacerda.github.io/app-geoperfil/)**: grátis, sem cadastro e sem instalar nada. O projeto de exemplo já vem carregado.
 
@@ -12,7 +12,7 @@ Lance os furos na planta, preencha o boletim metro a metro e trace o corte. O Ge
 
 ## Por que usar
 
-- **Menos retrabalho no CAD.** O perfil sai com os contatos já interpolados entre os furos, as hachuras, a régua de N-SPT, o NA, as escalas e a legenda. O DXF tem uma layer por solo e textos no tamanho certo para plotar.
+- **Menos retrabalho no CAD.** O perfil sai com os contatos já interpolados entre os furos, as hachuras, a régua de N-SPT, o NA, as escalas e a legenda. O DXF tem uma layer por material com hatch sólido, cada furo como bloco com atributos e textos no tamanho certo para plotar.
 - **Lançamento rápido.** Os metros já aparecem prontos até a profundidade limite. Enter ou Tab pula para o próximo, metro vazio repete a classificação de cima e dá para colar colunas direto do Excel.
 - **Coordenadas reais.** UTM SIRGAS 2000 ou latitude/longitude, com mapa de fundo, e exportação para o Google Earth.
 - **Visão 3D do subsolo** para apresentar ao cliente e à equipe, a partir dos mesmos dados do perfil.
@@ -43,6 +43,12 @@ Camadas de mesma classificação são correlacionadas entre furos vizinhos e lig
 
 ![Perfil 2D do corte A–A' com hachuras, régua de N-SPT, NA e legenda](docs/img/perfil-2d.jpg)
 
+### Padrão de prancha
+
+As camadas podem ser coloridas pela textura ou pelo **horizonte** (aterro, colúvio/tálus, solo residual, rocha alterada, rocha fraturada, rocha sã), como nas pranchas de projeto. Pedregulho e blocos aparecem como matacões em volta do furo, o topo rochoso ganha a marcação em vermelho e as sondagens mistas mostram o N-SPT de um lado e a recuperação (REC %) do outro. Na janela **Desenho…** entram o NA de projeto, as linhas de referência (fundo de escavação, cota de assentamento) e o N-SPT em golpes/30 cm. A tela, o PDF, o DXF e o 3D saem do mesmo desenho.
+
+![Perfil 2D colorido por horizonte, com blocos, topo rochoso, sondagens mistas, NA de projeto e fundo de escavação (dados de teste)](docs/img/perfil-horizonte.jpg)
+
 ## Modelo 3D do terreno
 
 Um bloco geológico sólido montado a partir dos furos **e dos perfis 2D**. Ao longo de cada corte, o 3D reproduz o Perfil 2D, inclusive os contatos ajustados à mão: arrastou uma transição no 2D, o 3D acompanha. Entre os cortes, a cota do terreno, a espessura de cada camada e o NA são interpolados a partir das sondagens. O bloco abre no alinhamento do corte ativo e mostra os furos e o N-SPT na face. Os botões **Ver no 3D** (no Perfil 2D) e **Ajustar contatos no 2D** (no 3D) levam de uma aba à outra.
@@ -55,6 +61,14 @@ Também tem exagero vertical, raio-X para ver os furos por dentro e transparênc
 
 ## Pronto para entregar
 
+### Prancha de perfis (A0 a A3)
+
+O botão **Prancha** monta a folha com os cortes escolhidos, todos na mesma escala (a maior que couber no formato), com planta-chave, legenda, notas e carimbo com tabela de revisões. Os dados do carimbo ficam salvos no projeto. Sai em PDF e em DXF.
+
+![Prancha A1 com quatro perfis, planta-chave, notas, legenda e carimbo (dados de teste)](docs/img/prancha-a1.jpg)
+
+### Perfil, boletim e DXF
+
 | PDF do perfil em A3 | Boletim de sondagem em PDF |
 |---|---|
 | ![PDF do perfil em A3 com escalas, legenda e carimbo](docs/img/pdf-perfil-a3.jpg) | ![Boletim de sondagem SP-01 em PDF](docs/img/pdf-boletim.jpg) |
@@ -63,7 +77,7 @@ Também tem exagero vertical, raio-X para ver os furos por dentro e transparênc
 
 **Boletim em PDF**: perfil do furo com hachuras, classificação e descrição, N-SPT, gráfico, NA e critério de parada.
 
-**DXF para o CAD**: perfil no mesmo layout e nas mesmas escalas do PDF, com uma layer por solo, hachura que não passa por cima dos textos e a planta de locação.
+**DXF para o CAD** (AutoCAD 2007): perfil no mesmo layout e nas mesmas escalas do PDF, uma layer por material com hatch sólido, contatos em polilinha, cada furo como bloco com atributos (nome, N-SPT e REC de cada metro), textos em ROMANS com acentos e a planta de locação.
 
 ![Perfil em DXF aberto num visualizador de CAD](docs/img/dxf-perfil.jpg)
 
@@ -71,8 +85,8 @@ Também tem exagero vertical, raio-X para ver os furos por dentro e transparênc
 
 | Entrada | Saída |
 |---|---|
-| CSV e XLSX (furos, camadas e N-SPT, inclusive com abas separadas) | DXF R12 (perfil e planta) |
-| GeoJSON e KML (pontos) | PDF do perfil (A3) e PDF do boletim |
+| CSV e XLSX (furos, camadas e N-SPT, inclusive com abas separadas) | DXF 2007 (perfil e planta, ou prancha) |
+| GeoJSON e KML (pontos) | PDF da prancha (A0 a A3), do perfil (A3) e do boletim |
 | Projeto GeoPerfil (JSON) | GeoJSON e KML (Google Earth), projeto em JSON, imagem do modelo 3D |
 
 A importação reconhece os cabeçalhos `furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`. Modelos de CSV e XLSX podem ser baixados dentro do app.
@@ -131,4 +145,5 @@ Tudo em metros. `x` = Leste e `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` qua
 - [x] Fase 3 — Planta georreferenciada (Leaflet, UTM SIRGAS 2000, GeoJSON/KML)
 - [x] Fase 4 — Perfil 2D v2 (contatos interpolados, ajuste manual, PDF A3 com carimbo, DXF)
 - [x] Fase 5 — Modelo 3D com three.js (bloco geológico interpolado, ligado ao Perfil 2D, corte no alinhamento do corte ativo)
+- [x] Fase 5b — Padrão de prancha (cores por horizonte, blocos, topo rochoso, sondagem mista, NA de projeto, DXF 2007 com blocos e atributos, prancha A0–A3)
 - [ ] Fase 6 — Classificação SUCS e integração com os apps de fundações
