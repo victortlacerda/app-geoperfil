@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { criarStore, lerAutosave } from '../src/store.js';
 import { projetoExemplo } from '../src/model/projeto.js';
-import { gerarDXF } from '../src/io/dxf.js';
+import { gerarDXF, seqendUnico } from '../src/io/dxf.js';
+import { camadaMaterial } from '../src/geo/desenho.js';
 import { escalasPerfil } from '../src/io/escalas.js';
 import { geometriaPerfil } from '../src/geo/perfil2d.js';
 import { perfilDoCorte } from '../src/geo/corte.js';
@@ -55,61 +56,84 @@ describe('store', () => {
   });
 });
 
+/** Lê o DXF em objetos { tipo, g: Map(código → [valores]) }. */
+function lerDXF(txt) {
+  const ls = txt.split('\n'), out = [];
+  for (let i = 0; i + 1 < ls.length; i += 2) {
+    const c = +ls[i].trim(), v = ls[i + 1];
+    if (c === 0) out.push({ tipo: v, g: new Map() });
+    else if (out.length) { const g = out.at(-1).g; if (!g.has(c)) g.set(c, []); g.get(c).push(v); }
+  }
+  return out;
+}
+
 describe('DXF', () => {
   const p = projetoExemplo();
   const corte = { id: 'c', nome: "A–A'", p1: [333030, 7394025], p2: [333210, 7394025], lado: -1, faixa: 100 };
   p.cortes.push(corte);
   const bhs = perfilDoCorte(corte, p.furos);
-  const dxf = gerarDXF(p, { bhs, ext: extensaoCotas(bhs), maxDist: Math.max(...bhs.map((b) => b.dist)), corte });
+  const dxf = gerarDXF(p, { bhs, corte });
+  const ents = lerDXF(dxf);
+  const val = (e, c) => e.g.get(c)?.[0];
 
-  it('é um DXF R12 completo e só ASCII', () => {
-    expect(dxf.startsWith('0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009')).toBe(true);
+  it('é um DXF 2007 completo, com acentos', () => {
+    expect(dxf).toContain('$ACADVER');
+    expect(dxf).toContain('AC1021');
     expect(dxf.trimEnd().endsWith('EOF')).toBe(true);
-    expect(/^[\x09\x0A\x0D\x20-\x7E]*$/.test(dxf)).toBe(true);
+    expect(dxf).toContain('PLANTA DE LOCAÇÃO');
   });
 
   it('contém planta e perfil', () => {
-    expect(dxf).toContain('PLANTA DE LOCACAO');
-    expect(dxf).toContain("PERFIL GEOLOGICO - CORTE A-A'");
-    expect((dxf.match(/\nCIRCLE\n8\nFUROS\n/g) || []).length).toBe(4);
+    expect(dxf).toContain("PERFIL A–A'");
+    expect(ents.filter((e) => e.tipo === 'CIRCLE' && val(e, 8) === 'PLANTA-FUROS')).toHaveLength(4);
   });
 
   it('todas as camadas usadas estão declaradas na tabela LAYER', () => {
-    const declaradas = new Set([...dxf.matchAll(/0\nLAYER\n2\n([^\n]+)\n/g)].map((m) => m[1]));
-    const usadas = new Set([...dxf.matchAll(/\n(?:LINE|CIRCLE|TEXT|POLYLINE|VERTEX|SEQEND|SOLID)\n8\n([^\n]+)\n/g)].map((m) => m[1]));
+    const declaradas = new Set(ents.filter((e) => e.tipo === 'LAYER').map((e) => val(e, 2)));
+    const usadas = new Set(ents.filter((e) => ['LINE', 'CIRCLE', 'TEXT', 'LWPOLYLINE', 'HATCH', 'INSERT', 'ATTRIB', 'ATTDEF'].includes(e.tipo)).map((e) => val(e, 8)));
     usadas.forEach((l) => expect(declaradas.has(l), l).toBe(true));
   });
 
-  it('usa as escalas do PDF e textos dimensionados para plotar em 1:Eh', () => {
+  it('um layer por material, com hatch sólido', () => {
+    const hatches = ents.filter((e) => e.tipo === 'HATCH');
+    expect(hatches.length).toBeGreaterThan(4);
+    expect(hatches.every((h) => val(h, 2) === 'SOLID')).toBe(true);
     const geo = geometriaPerfil(bhs, {});
-    const { Eh, Ev } = escalasPerfil(geo, bhs);
-    expect(dxf).toContain(`Escala horizontal 1:${Eh} - vertical 1:${Ev}`);
-    // o nome do furo tem 3 mm no papel
-    const m = dxf.match(/\n40\n([\d.]+)\n1\nSP-01\n/g).map((t) => +t.split('\n')[2]);
-    expect(m.some((h) => Math.abs(h - (3 * Eh) / 1000) < 1e-6)).toBe(true);
-    expect(dxf).toContain('0\nSTYLE\n2\nGEOPERFIL');
-    expect(dxf).toContain('0\nLTYPE\n2\nTRACEJADA');
+    const mats = new Set(geo.poligonos.map((q) => camadaMaterial(q.solo, q.sec)));
+    const camadasHatch = new Set(hatches.map((h) => val(h, 8)));
+    mats.forEach((m) => expect(camadasHatch.has(m), m).toBe(true));
   });
 
-  it('nenhum texto de rótulo cai sobre a régua de SPT', () => {
+  it('cada furo é um bloco com atributos (nome e N-SPT)', () => {
+    const ins = ents.filter((e) => e.tipo === 'INSERT');
+    expect(ins.map((e) => val(e, 2)).sort()).toEqual(bhs.map((b) => b.name).sort());
+    const attribs = ents.filter((e) => e.tipo === 'ATTRIB');
+    expect(attribs.some((a) => val(a, 2) === 'NOME' && val(a, 1) === bhs[0].name)).toBe(true);
+    expect(attribs.some((a) => /^NSPT_\d\d$/.test(val(a, 2)))).toBe(true);
+    expect(ents.filter((e) => e.tipo === 'ATTDEF').length).toBe(attribs.length);
+    // um SEQEND por INSERT com atributos
+    expect(ents.filter((e) => e.tipo === 'SEQEND').length).toBe(ins.length);
+  });
+
+  it('usa as escalas do PDF e textos no estilo ROMANS dimensionados para plotar em 1:Eh', () => {
     const geo = geometriaPerfil(bhs, {});
-    const { Eh, Ev, cBase } = escalasPerfil(geo, bhs);
-    const kv = Eh / Ev, u = Eh / 1000;
-    const rot = [...dxf.matchAll(/0\nTEXT\n8\nROTULOS\n10\n([-\d.]+)\n20\n([-\d.]+)\n30\n0.0\n40\n([\d.]+)\n1\n([^\n]+)\n/g)]
-      .map((m) => ({ x: +m[1], y: +m[2], h: +m[3], t: m[4] }));
-    expect(rot.length).toBeGreaterThan(3);
-    rot.forEach((r) => bhs.forEach((b) => {
-      const prof = Math.max(...b.layers.map((l) => l.ate));
-      const w = r.t.length * r.h * 0.66;
-      const naFaixaY = r.y > (b.cota - prof - cBase) * kv && r.y < (b.cota - cBase) * kv;
-      const naFaixaX = r.x + w / 2 > b.dist - 0.9 * u && r.x - w / 2 < b.dist + 0.9 * u;
-      expect(naFaixaY && naFaixaX, `${r.t} sobre ${b.name}`).toBe(false);
-    }));
+    const { Eh, Ev } = escalasPerfil(geo, bhs);
+    expect(dxf).toContain(`ESC. H 1:${Eh} · V 1:${Ev}`);
+    expect(dxf).toContain('romans.shx');
+    const nome = ents.find((e) => e.tipo === 'ATTRIB' && val(e, 2) === 'NOME');
+    expect(Math.abs(+val(nome, 40) - (3.2 * 0.72 * Eh) / 1000)).toBeLessThan(1e-6);
+    expect(val(nome, 7)).toBe('ROMANS');
+    expect(dxf).toContain('TRACEJADA');
   });
 
   it('sem corte gera só a planta', () => {
     const so = gerarDXF(p, { bhs: [] });
     expect(so).toContain('PLANTA');
-    expect(so).not.toContain('PERFIL GEOLOGICO');
+    expect(so).not.toContain('PERFIL A');
+  });
+
+  it('SEQEND único depois dos atributos', () => {
+    const t = ['0', 'INSERT', '0', 'ATTRIB', '0', 'SEQEND', '0', 'ATTRIB', '0', 'SEQEND', '0', 'LINE', '0', 'EOF'].join('\n');
+    expect(seqendUnico(t)).toBe(['0', 'INSERT', '0', 'ATTRIB', '0', 'ATTRIB', '0', 'SEQEND', '0', 'LINE', '0', 'EOF'].join('\n'));
   });
 });

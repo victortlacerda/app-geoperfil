@@ -1,291 +1,240 @@
-// Exportação DXF R12 (AC1009): planta de locação + perfil do corte ativo.
-import { niceStep } from '../geo/zonas.js';
+// Exportação DXF (AutoCAD 2007, AC1021): perfil do corte ativo no padrão de prancha
+// + planta de locação.
+//
+// O perfil sai do mesmo desenho da tela e do PDF (geo/desenho.js), com:
+// - uma camada (layer) por material, com HATCH sólido na cor do material;
+// - contatos, terreno e NA em LWPOLYLINE (as curvas do modo Suave ficam lisas);
+// - cada furo como BLOCO com atributos (NOME, NSPT_01…, REC_01…), editáveis no CAD;
+// - textos no estilo ROMANS (romans.shx), acentos preservados (DXF 2007 é UTF-8).
+//
+// Unidades: X em metros reais; Y com o exagero vertical (1 m de cota = Eh/Ev
+// unidades). Textos e símbolos dimensionados para plotar o modelo em 1:Eh.
+import {
+  DxfWriter, point3d, HatchBoundaryPaths, HatchPolylineBoundary, vertex, pattern, HatchPredefinedPatterns,
+  Units, TextHorizontalAlignment, TextVerticalAlignment, aciHex,
+} from '@tarikjabiri/dxf';
 import { geometriaPerfil } from '../geo/perfil2d.js';
-import { secLabel } from '../model/catalogo.js';
-import { escalaPadrao, escalasPerfil } from './escalas.js';
-import { resolverFuro } from '../model/projeto.js';
-import { hachuraPoligono, furarHachura, dentro } from './hachura.js';
+import { desenharPerfil, desenharLegenda, legendaPerfil, caixaDe, camadaMaterial } from '../geo/desenho.js';
+import { estiloPadrao, resolverFuro } from '../model/projeto.js';
+import { escalaPadrao, escalasPerfil, folgaPerfil } from './escalas.js';
+import { hachuraPoligono } from './hachura.js';
 
-// DXF R12 é ASCII: sem quebras de linha, sem acentos e sem travessão.
-const limpa = (t) => String(t).replace(/[\r\n]+/g, ' ').replace(/[–—]/g, '-')
-  .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '?');
-
-// alinhamento do TEXT: grupo 72 (0 esq, 1 centro, 2 dir) e 73 (0 base, 2 meio)
-const ALINHA = { l: [0, 0], c: [1, 0], r: [2, 0], m: [1, 2], ml: [0, 2], mr: [2, 2] };
-export const ESTILO = 'GEOPERFIL';
-
-export const D = {
-  line: (x1, y1, x2, y2, ly) => `0\nLINE\n8\n${ly}\n10\n${x1.toFixed(4)}\n20\n${y1.toFixed(4)}\n30\n0.0\n11\n${x2.toFixed(4)}\n21\n${y2.toFixed(4)}\n31\n0.0\n`,
-  circle: (x, y, r, ly) => `0\nCIRCLE\n8\n${ly}\n10\n${x.toFixed(4)}\n20\n${y.toFixed(4)}\n30\n0.0\n40\n${r.toFixed(4)}\n`,
-  text: (t, x, y, h, ly, a = 0, al = 'c') => {
-    const [h72, v73] = ALINHA[al] || ALINHA.c;
-    const p = `10\n${x.toFixed(4)}\n20\n${y.toFixed(4)}\n30\n0.0\n`;
-    return `0\nTEXT\n8\n${ly}\n${p}40\n${h.toFixed(4)}\n1\n${limpa(t)}\n50\n${a.toFixed(1)}\n7\n${ESTILO}\n` +
-      (h72 || v73 ? `72\n${h72}\n11\n${x.toFixed(4)}\n21\n${y.toFixed(4)}\n31\n0.0\n73\n${v73}\n` : '');
-  },
-  poly: (pts, ly, closed = true, ltype = null) => {
-    let s = `0\nPOLYLINE\n8\n${ly}\n${ltype ? `6\n${ltype}\n` : ''}66\n1\n70\n${closed ? 1 : 0}\n`;
-    pts.forEach(([x, y]) => { s += `0\nVERTEX\n8\n${ly}\n10\n${x.toFixed(4)}\n20\n${y.toFixed(4)}\n30\n0.0\n`; });
-    return s + `0\nSEQEND\n8\n${ly}\n`;
-  },
-  // preenchimento sólido: retângulo (x0,y0)-(x1,y1) ou triângulo
-  solido: (pts, ly) => {
-    const [a, b, c, d = pts[2]] = pts.length === 4 ? [pts[0], pts[1], pts[3], pts[2]] : pts;
-    return `0\nSOLID\n8\n${ly}\n` + [a, b, c, d].map(([x, y], i) => `1${i}\n${x.toFixed(4)}\n2${i}\n${y.toFixed(4)}\n3${i}\n0.0\n`).join('');
-  },
-};
-
-/** Largura aproximada de um texto em Arial (unidades do desenho). */
-export const larguraTexto = (t, h) => String(t).length * h * 0.66;
-
-const soloLy = (solo, sec) => (solo.code + (sec ? '_' + sec : '')).replace(/[^A-Z0-9_]/gi, '').substring(0, 20);
-
+export const ESTILO = 'ROMANS';
 const fmt = (v, d = 2) => v.toFixed(d).replace('.', ',');
+
+// ── cores ──
+const rgb = (hex) => {
+  const h = String(hex || '#000000').replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6), 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const corVerdadeira = (hex) => { const [r, g, b] = rgb(hex); return (r << 16) | (g << 8) | b; };
+const ACI = Array.from({ length: 255 }, (_, i) => [i + 1, rgb(aciHex(i + 1))]);
+/** Cor ACI mais próxima (o layer leva a ACI e a cor verdadeira). */
+export function aciProxima(hex) {
+  const [r, g, b] = rgb(hex);
+  if (Math.max(r, g, b) - Math.min(r, g, b) < 12 && r < 40) return 7; // preto/tinta → branco/preto do CAD
+  let melhor = 7, dm = Infinity;
+  ACI.forEach(([i, [R, G, B]]) => { if (i === 7) return; const d = (R - r) ** 2 + (G - g) ** 2 + (B - b) ** 2; if (d < dm) { dm = d; melhor = i; } });
+  return melhor;
+}
+
+// camadas de desenho (não materiais): cor ACI padrão
+const CAMADAS = {
+  'PERFIL-GRADE': 8, 'PERFIL-EIXOS': 7, CONTATOS: 7, TERRENO: 7, NA: 5, 'NA-PROJETO': 4, REFERENCIAS: 7, 'TOPO-ROCHOSO': 1,
+  BLOCOS: 8, ROTULOS: 7, SONDAGEM: 7, CORTE: 5, TITULO: 7, LEGENDA: 7, HACHURA: 8, PLANTA: 7, 'PLANTA-FUROS': 7, 'PLANTA-CORTES': 1,
+};
+const nomeCamada = (n) => String(n || '0').replace(/[<>/\\":;?*|=`,]/g, ' ').trim() || '0';
+
+/**
+ * Escreve itens de geo/desenho.js (y para baixo) num DxfWriter (y para cima).
+ * Itens com `grupo` viram um bloco por grupo, inserido no ponto `base[grupo]`;
+ * textos com `atrib` viram ATTDEF no bloco e ATTRIB no INSERT.
+ */
+function emitir(w, itens, { mm, base = {}, camadasMat }) {
+  const camada = (nome, cor) => {
+    const n = nomeCamada(nome);
+    if (!w.layer(n)) {
+      const ly = w.addLayer(n, cor ? aciProxima(cor) : (CAMADAS[n] ?? 7), 'CONTINUOUS');
+      if (cor) ly.trueColor = corVerdadeira(cor);
+    }
+    return n;
+  };
+  const tc = (hex, ly) => {
+    // a cor do item vai como cor verdadeira só quando difere da cor do layer
+    if (!hex || camadasMat.has(ly)) return {};
+    const [r, g, b] = rgb(hex);
+    return r < 40 && g < 40 && b < 40 ? {} : { trueColor: String(corVerdadeira(hex)) };
+  };
+  const tipoLinha = (dash) => (dash ? 'TRACEJADA' : undefined);
+
+  const desenhar = (alvo, it, dx, dy) => {
+    const P = ([x, y]) => [x - dx, -(y - dy)];
+    if (it.t === 'poli') {
+      if (it.pts.length < 3) return;
+      const pts = it.pts.map(P);
+      if (it.fill && it.fill !== '#ffffff' && it.fill !== '#fff') {
+        const ly = camada(it.camada, camadasMat.has(nomeCamada(it.camada)) ? it.fill : null);
+        const bp = new HatchBoundaryPaths();
+        bp.addPolylineBoundary(new HatchPolylineBoundary(pts.map(([x, y]) => vertex(x, y))));
+        alvo.addHatch(bp, pattern({ name: HatchPredefinedPatterns.SOLID }), { layerName: ly, ...(camadasMat.has(ly) ? {} : { trueColor: String(corVerdadeira(it.fill)) }) });
+      }
+      if (it.hachura) {
+        const { linhas, pontos } = hachuraPoligono(pts, it.hachura.solo, it.hachura.sec, 1.3 * mm);
+        const ly = camada('HACHURA');
+        linhas.forEach(([a, b, c, d]) => alvo.addLine(point3d(a, b), point3d(c, d), { layerName: ly }));
+        pontos.forEach(([x, y]) => alvo.addCircle(point3d(x, y), 0.14 * mm, { layerName: ly }));
+      }
+      if (it.stroke || (it.fill === '#ffffff' || it.fill === '#fff')) {
+        const ly = camada(it.camada === undefined ? '0' : (camadasMat.has(nomeCamada(it.camada)) ? 'CONTATOS' : it.camada));
+        alvo.addLWPolyline(pts.map(([x, y]) => ({ point: { x, y } })), { layerName: ly, flags: 1, ...tc(it.stroke, ly) });
+      }
+    } else if (it.t === 'linha') {
+      if (it.pts.length < 2) return;
+      const ly = camada(it.camada);
+      const pts = it.pts.map(P), lt = tipoLinha(it.dash);
+      if (pts.length === 2) alvo.addLine(point3d(...pts[0]), point3d(...pts[1]), { layerName: ly, ...tc(it.cor, ly), ...(lt ? { lineType: lt } : {}) });
+      else alvo.addLWPolyline(pts.map(([x, y]) => ({ point: { x, y } })), { layerName: ly, ...tc(it.cor, ly), ...(lt ? { lineType: lt } : {}) });
+    }
+  };
+  const textoOpc = (it, ly, x, y) => ({
+    layerName: ly, ...tc(it.cor, ly), rotation: it.ang || 0,
+    horizontalAlignment: it.al === 'r' ? TextHorizontalAlignment.Right : it.al === 'c' ? TextHorizontalAlignment.Center : TextHorizontalAlignment.Left,
+    verticalAlignment: it.vb === 'meio' ? TextVerticalAlignment.Middle : TextVerticalAlignment.BaseLine,
+    secondAlignmentPoint: point3d(x, y),
+  });
+  const altura = (it) => it.h * 0.72 * mm; // corpo da letra (PDF) → altura das maiúsculas (CAD)
+
+  // fora dos grupos: direto no model space
+  itens.filter((it) => !it.grupo).forEach((it) => {
+    if (it.t !== 'texto') return desenhar(w, it, 0, 0);
+    const ly = camada(it.camada), x = it.x, y = -it.y;
+    const t = w.addText(point3d(x, y), altura(it), it.txt, textoOpc(it, ly, x, y));
+    t.textStyle = ESTILO;
+  });
+
+  // grupos (furos): bloco com atributos
+  const grupos = new Map();
+  itens.filter((it) => it.grupo).forEach((it) => { if (!grupos.has(it.grupo)) grupos.set(it.grupo, []); grupos.get(it.grupo).push(it); });
+  grupos.forEach((lista, grupo) => {
+    const [bx, by] = base[grupo] || [lista[0].x ?? lista[0].pts[0][0], lista[0].y ?? lista[0].pts[0][1]];
+    const nome = nomeCamada(grupo.replace(/^FURO:/, '')).replace(/\s+/g, '_');
+    const blk = w.addBlock(nome);
+    const atribs = [];
+    lista.forEach((it) => {
+      if (it.t !== 'texto') return desenhar(blk, it, bx, by);
+      const ly = camada(it.camada), x = it.x - bx, y = -(it.y - by);
+      if (it.atrib) {
+        const a = blk.addAttdef(point3d(x, y), altura(it), it.atrib, it.txt, textoOpc(it, ly, x, y));
+        a.textStyle = ESTILO;
+        atribs.push(it);
+      } else { const t = blk.addText(point3d(x, y), altura(it), it.txt, textoOpc(it, ly, x, y)); t.textStyle = ESTILO; }
+    });
+    const ins = w.addInsert(blk.name, point3d(bx, -by), { layerName: camada('SONDAGEM') });
+    atribs.forEach((it) => {
+      const ly = camada(it.camada), x = it.x, y = -it.y;
+      const a = w.addAttrib(point3d(x, y), altura(it), it.atrib, it.txt, ins, textoOpc(it, ly, x, y));
+      a.textStyle = ESTILO;
+    });
+  });
+}
 
 /**
  * Gera o texto DXF.
- *
- * O perfil sai no mesmo layout e nas mesmas escalas do PDF A3: X em metros
- * reais, Y com o exagero vertical (1 m de cota = Eh/Ev unidades) e os textos
- * dimensionados para plotar o modelo em 1:Eh. A hachura ganha um vão atrás
- * dos rótulos e da régua de SPT, que no DXF não têm fundo branco.
- *
  * @param projeto projeto v2
- * @param perfil { bhs, ext, maxDist, corte, geo } — do corte ativo, ou bhs vazio
+ * @param perfil { bhs, corte, geo } — do corte ativo, ou bhs vazio
  * @param axis 'cota' | 'prof'
  */
 export function gerarDXF(projeto, perfil, axis = 'cota') {
-  const furos = projeto.furos.map(resolverFuro);
-  const LY = new Map([['TERRENO', 7], ['FRONTEIRAS', 8], ['SPT', 7], ['SPT_TEXTO', 7], ['NA', 5], ['COTAS_Y', 8], ['COTAS_X', 8], ['FUROS', 8], ['FUROS_NOME', 7], ['CORTES', 1], ['IMP', 1], ['ROTULOS', 7], ['LEGENDA', 7]]);
-  const camada = (solo, sec) => {
-    const n = soloLy(solo, sec);
-    if (!LY.has(n)) LY.set(n, 252);
-    if (!LY.has(n + '_H')) LY.set(n + '_H', 253);
-    return n;
-  };
-
+  const w = new DxfWriter();
+  w.setUnits(Units.Meters);
+  const st = w.tables.addStyle(ESTILO); st.fontFileName = 'romans.shx';
   const { bhs = [], corte = null } = perfil || {};
   const temPerfil = bhs.length >= 2;
-  let ent = '';
-  let topoPerfil = 0, uPerfil = 0;
+  const estilo = estiloPadrao(projeto.projeto?.estilo || {});
+  let topoPerfil = 0, u = 0.1;
 
-  // ── PERFIL ──
   if (temPerfil) {
     const geo = perfil.geo || geometriaPerfil(bhs, { ajustes: corte?.ajustes || {}, modo: corte?.modo || 'interpolado' });
     const { Eh, Ev, exagero, passoC, cTopo, cBase } = escalasPerfil(geo, bhs);
-    const u = Eh / 1000, kv = Eh / Ev, mm = (v) => v * u, mmV = 1000 / Ev; // mm de papel por metro de cota
-    const X = (d) => d, Y = (c) => (c - cBase) * kv;
-    const L = geo.totDist, yTop = Y(cTopo);
-    uPerfil = u; topoPerfil = yTop;
-    const casas = passoC < 1 ? 1 : 0;
-
-    // régua de SPT de cada furo e a faixa que ela ocupa (sem hachura por baixo)
-    const rw = mm(0.9), hSPT = mm(Math.min(2.2, mmV * 0.8)), mostraSPT = mmV >= 1.6;
-    const faixas = bhs.map((b) => {
-      const prof = b.layers.length ? Math.max(...b.layers.map((l) => l.ate)) : 0;
-      const textos = mostraSPT ? Object.values(b.sptTexto || {}) : [];
-      const wt = textos.length ? Math.max(...textos.map((t) => larguraTexto(t, hSPT))) + mm(1.2) : mm(0.4);
-      return { b, prof, ret: [X(b.dist) - rw - mm(0.4), Y(b.cota - prof) - mm(0.4), X(b.dist) + rw + mm(0.4) + wt, Y(b.cota) + mm(0.4)] };
+    u = Eh / 1000; // unidades do modelo por mm de papel
+    const kv = Eh / Ev, fol = folgaPerfil(geo.totDist);
+    w.addLType('TRACEJADA', '__ __ __', [3 * u, -1.5 * u]);
+    const X = (d) => d, Y = (c) => (cTopo - c) * kv; // y para baixo, como no papel
+    const cfg = projeto.projeto || {};
+    const { itens } = desenharPerfil({
+      bhs, geo, corte, estilo, axis, X, Y, mm: u, cTopo, passoC,
+      janela: { d0: -fol, d1: geo.totDist + fol, c0: cBase, c1: cTopo },
+      mostrar: { na: true, spt: true, rotulos: estilo.rotulos, hachura: estilo.hachura },
+      naProjeto: cfg.naProjeto, referencias: cfg.referencias || [],
+      titulo: { texto: `PERFIL ${corte?.nome || ''}`.trim(), sub: `ESC. H 1:${Eh} · V 1:${Ev}${exagero > 1 ? ` (exagero ${fmt(exagero, exagero % 1 ? 1 : 0)}×)` : ''} · plotar em 1:${Eh}` },
     });
-    const cruza = (r, q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1];
-
-    // posição dos rótulos: dentro do polígono e fora das réguas de SPT
-    const hCod = mm(2.5), hSec = mm(2), rotulos = [];
-    geo.poligonos.forEach((p, i) => {
-      if (p.rotulo.h * mmV < 3.2) return;
-      const pts = p.pts.map(([d, c]) => [X(d), Y(c)]);
-      const sec = p.sec ? secLabel(p.sec) : '';
-      const opcoes = [[p.solo.code, ...(sec && p.rotulo.h * mmV > 7 ? [sec] : [])], [p.solo.code]];
-      const cy = Y(p.rotulo.c);
-      for (const linhas of opcoes) {
-        const W = Math.max(larguraTexto(linhas[0], hCod), linhas[1] ? larguraTexto(linhas[1], hSec) : 0) + mm(2);
-        const H = mm(linhas.length * 3 + 1);
-        const ok = (cx) => {
-          const r = [cx - W / 2, cy - H / 2, cx + W / 2, cy + H / 2], f = mm(0.8);
-          const cantos = [[r[0] - f, r[1] - f], [r[2] + f, r[1] - f], [r[2] + f, r[3] + f], [r[0] - f, r[3] + f]];
-          return cantos.every(([x, y]) => dentro(x, y, pts)) && !faixas.some((f) => cruza(r, f.ret)) && !rotulos.some((o) => cruza(r, o.ret)) ? r : null;
-        };
-        const passo = Math.max(W / 4, 0.5);
-        for (let k = 0; k <= 16; k++) {
-          const cx = X(p.rotulo.d) + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * passo;
-          const r = ok(cx);
-          if (r) { rotulos.push({ i, linhas, cx, cy, ret: r }); return; }
-        }
-      }
-    });
-
-    // grade e eixo de cotas
-    for (let c = cBase; c <= cTopo + 1e-9; c += passoC) {
-      ent += D.line(X(0) - mm(4), Y(c), X(0) - mm(2), Y(c), 'COTAS_Y');
-      ent += D.text(fmt(axis === 'cota' ? c : cTopo - c, casas), X(0) - mm(5), Y(c), mm(2.2), 'COTAS_Y', 0, 'mr');
-    }
-    ent += D.line(X(0) - mm(2), Y(cBase), X(0) - mm(2), Y(cTopo), 'COTAS_Y');
-    ent += D.text(axis === 'cota' ? 'Cota (m)' : 'Profundidade (m)', X(0) - mm(16), (yTop) / 2, mm(2.5), 'COTAS_Y', 90, 'm');
-
-    // camadas, hachura com vãos e contornos
-    const vaos = [...faixas.map((f) => f.ret), ...rotulos.map((r) => r.ret)];
-    geo.poligonos.forEach((p) => {
-      const ln = camada(p.solo, p.sec);
-      const pts = p.pts.map(([d, c]) => [X(d), Y(c)]);
-      const { linhas, pontos } = furarHachura(hachuraPoligono(pts, p.solo, p.sec, 1.3 * u), vaos);
-      ent += linhas.map(([x1, y1, x2, y2]) => D.line(x1, y1, x2, y2, ln + '_H')).join('');
-      ent += pontos.map(([x, y]) => D.circle(x, y, mm(0.15), ln + '_H')).join('');
-      ent += D.poly(pts, 'FRONTEIRAS', true);
-    });
-    rotulos.forEach(({ linhas, cx, cy }) => {
-      if (linhas.length === 1) ent += D.text(linhas[0], cx, cy, hCod, 'ROTULOS', 0, 'm');
-      else {
-        ent += D.text(linhas[0], cx, cy + mm(1.5), hCod, 'ROTULOS', 0, 'm');
-        ent += D.text(linhas[1], cx, cy - mm(1.6), hSec, 'ROTULOS', 0, 'm');
-      }
-    });
-
-    // terreno e NA
-    ent += D.poly(geo.terreno.map(([d, c]) => [X(d), Y(c)]), 'TERRENO', false);
-    if (geo.na.length > 1) ent += D.poly(geo.na.map(([d, c]) => [X(d), Y(c)]), 'NA', false, 'TRACEJADA');
-
-    // nome/cota no topo e "d =" embaixo: furos próximos vão para outra linha
-    const escalonar = (larg, folga) => {
-      const fins = [], linha = new Map();
-      [...bhs].sort((p, q) => p.dist - q.dist).forEach((b) => {
-        const w = larg(b), x0 = X(b.dist) - w / 2;
-        let k = fins.findIndex((f) => x0 > f + folga);
-        if (k < 0) k = fins.length;
-        fins[k] = X(b.dist) + w / 2; linha.set(b, k);
-      });
-      return linha;
-    };
-    const cab = escalonar((b) => Math.max(larguraTexto(b.name, mm(3)), larguraTexto(`${fmt(b.cota)} m`, mm(2.2))), mm(2));
-    const dd = escalonar((b) => larguraTexto(`d = ${fmt(b.dist, 1)} m`, mm(2.2)), mm(2));
-    const linhaCab = (b) => cab.get(b), linhaD = (b) => dd.get(b);
-    const sobe = mm(8.5 * Math.max(...cab.values())), desce = mm(3.5 * Math.max(...dd.values()));
-    topoPerfil = yTop + sobe;
-
-    // furos: linha de chamada, régua de SPT, N, NA, impenetrável, nome e cota
-    faixas.forEach(({ b, prof }) => {
-      const x = X(b.dist);
-      ent += D.line(x, Y(b.cota), x, yTop + mm(3), 'FUROS');
-      for (let m = 1; m <= Math.ceil(prof); m++) {
-        const ya = Y(b.cota - (m - 1)), yb = Y(b.cota - Math.min(m, prof));
-        const ret = [[x - rw, yb], [x + rw, yb], [x + rw, ya], [x - rw, ya]];
-        ent += D.poly(ret, 'SPT', true);
-        if (m % 2) ent += D.solido(ret, 'SPT');
-        const t = b.sptTexto?.[m];
-        if (t !== undefined && mostraSPT) ent += D.text(t, x + rw + mm(0.8), (ya + yb) / 2, hSPT, b.spt[m] >= 50 ? 'IMP' : 'SPT_TEXTO', 0, 'ml');
-      }
-      if (b.na > 0) {
-        const y = Y(b.cota - b.na);
-        ent += D.solido([[x - mm(3.4), y + mm(1.7)], [x - mm(1.4), y + mm(1.7)], [x - mm(2.4), y]], 'NA');
-      }
-      if (b.imp) {
-        const y = Y(b.cota - prof);
-        for (let k = 0; k < 3; k++) ent += D.line(x - mm(2), y - mm(1 + k), x + mm(2), y - mm(1 + k), 'IMP');
-      }
-      const lc = linhaCab(b), ld = linhaD(b);
-      ent += D.text(b.name, x, yTop + mm(8.5 + 8.5 * lc), mm(3), 'FUROS_NOME', 0, 'c');
-      ent += D.text(`${fmt(b.cota)} m`, x, yTop + mm(4.5 + 8.5 * lc), mm(2.2), 'COTAS_Y', 0, 'c');
-      ent += D.text(`d = ${fmt(b.dist, 1)} m`, x, -mm(8.5 + 3.5 * ld), mm(2.2), 'COTAS_X', 0, 'c');
-    });
-
-    // eixo de distâncias
-    const passoD = niceStep(L / 8 || 1);
-    ent += D.line(X(0), 0, X(L), 0, 'COTAS_X');
-    for (let d = 0; d <= L + 1e-9; d += passoD) {
-      ent += D.line(X(d), 0, X(d), -mm(1.5), 'COTAS_X');
-      ent += D.text(fmt(d, 0), X(d), -mm(4.8), mm(2.2), 'COTAS_X', 0, 'c');
-    }
-    ent += D.text('Distancia (m)', X(L) / 2, -mm(13) - desce, mm(2.5), 'COTAS_X', 0, 'c');
-
-    // título, corte e escalas
-    const [n1, n2] = (corte?.nome || "A–A'").split('–');
-    ent += D.text(n1 || 'A', X(0) - mm(3), yTop + sobe + mm(13), mm(4), 'CORTES', 0, 'r');
-    ent += D.text(n2 || "A'", X(L) + mm(3), yTop + sobe + mm(13), mm(4), 'CORTES', 0, 'l');
-    ent += D.text('PERFIL GEOLOGICO - CORTE ' + (corte?.nome || ''), X(0) - mm(20), yTop + sobe + mm(24), mm(4), 'LEGENDA', 0, 'l');
-    ent += D.text(`Escala horizontal 1:${Eh} - vertical 1:${Ev} (exagero vertical ${fmt(exagero, exagero % 1 ? 1 : 0)}x). Plotar o modelo em 1:${Eh}.`,
-      X(0) - mm(20), yTop + sobe + mm(19), mm(2.2), 'LEGENDA', 0, 'l');
-
-    // legenda e escala gráfica, abaixo do perfil
-    const solos = [...new Map(geo.poligonos.map((p) => [p.solo.code, p.solo])).values()];
-    const secs = [...new Set(geo.poligonos.map((p) => p.sec).filter(Boolean))];
-    const larg = Math.max(X(L), mm(200));
-    let lx = X(0) - mm(20), ly = -mm(22) - desce;
-    ent += D.text('LEGENDA', lx, ly, mm(2.8), 'LEGENDA', 0, 'l');
-    ly -= mm(6);
-    const item = (desenho, texto) => {
-      const tw = larguraTexto(limpa(texto), mm(2)) + mm(14);
-      if (lx + tw > X(0) - mm(20) + larg) { lx = X(0) - mm(20); ly -= mm(6); }
-      desenho(lx, ly); ent += D.text(texto, lx + mm(10), ly + mm(1.8), mm(2), 'LEGENDA', 0, 'ml'); lx += tw + mm(3);
-    };
-    const amostra = (a, b) => [[a, b], [a + mm(8), b], [a + mm(8), b + mm(3.6)], [a, b + mm(3.6)]];
-    solos.forEach((s) => item((a, b) => {
-      const ln = camada(s, ''), pts = amostra(a, b);
-      ent += D.poly(pts, 'LEGENDA', true);
-      const { linhas, pontos } = hachuraPoligono(pts, s, '', 1.3 * u);
-      ent += linhas.map(([x1, y1, x2, y2]) => D.line(x1, y1, x2, y2, ln + '_H')).join('');
-      ent += pontos.map(([x, y]) => D.circle(x, y, mm(0.15), ln + '_H')).join('');
-    }, s.label));
-    secs.forEach((sec) => item((a, b) => {
-      const ln = camada({ code: 'SEC' }, sec), pts = amostra(a, b);
-      ent += D.poly(pts, 'LEGENDA', true);
-      ent += hachuraPoligono(pts, { hatch: '' }, sec, 1.3 * u).linhas.map(([x1, y1, x2, y2]) => D.line(x1, y1, x2, y2, ln + '_H')).join('');
-    }, secLabel(sec)));
-    item((a, b) => { ent += D.line(a, b + mm(1.8), a + mm(8), b + mm(1.8), 'TERRENO'); }, 'Terreno');
-    item((a, b) => { ent += D.poly([[a, b + mm(1.8)], [a + mm(8), b + mm(1.8)]], 'NA', false, 'TRACEJADA'); }, "Nivel d'agua");
-    item((a, b) => {
-      const r1 = [[a + mm(3), b + mm(1.8)], [a + mm(5), b + mm(1.8)], [a + mm(5), b + mm(3.6)], [a + mm(3), b + mm(3.6)]];
-      ent += D.solido(r1, 'SPT') + D.poly([[a + mm(3), b], [a + mm(5), b], [a + mm(5), b + mm(3.6)], [a + mm(3), b + mm(3.6)]], 'SPT', true);
-    }, 'Regua de SPT (N por metro)');
-    item((a, b) => { for (let k = 0; k < 3; k++) ent += D.line(a + mm(2), b + mm(0.8 + k), a + mm(6), b + mm(0.8 + k), 'IMP'); }, 'Impenetravel');
-
-    const em = niceStep((40 * Eh) / 1000), emm = mm((em * 1000) / Eh), ex = X(0) - mm(20), ey = ly - mm(10);
-    for (let i = 0; i < 4; i++) {
-      const r = [[ex + (i * emm) / 4, ey], [ex + ((i + 1) * emm) / 4, ey], [ex + ((i + 1) * emm) / 4, ey + mm(1.5)], [ex + (i * emm) / 4, ey + mm(1.5)]];
-      ent += D.poly(r, 'LEGENDA', true);
-      if (i % 2 === 0) ent += D.solido(r, 'LEGENDA');
-    }
-    ent += D.text('0', ex, ey + mm(2.5), mm(2), 'LEGENDA', 0, 'c');
-    ent += D.text(`${fmt(em, em < 10 ? 1 : 0)} m`, ex + emm, ey + mm(2.5), mm(2), 'LEGENDA', 0, 'c');
-    ent += D.text(`Escala horizontal 1:${Eh}`, ex + emm + mm(6), ey + mm(0.75), mm(2), 'LEGENDA', 0, 'ml');
+    const caixa = caixaDe(itens, u);
+    const entradas = legendaPerfil(bhs, geo, { estilo, naProjeto: cfg.naProjeto, referencias: cfg.referencias || [], mostrar: { na: true } });
+    const legMat = entradas.filter((e) => e.tipo === 'material');
+    const leg = desenharLegenda(entradas, { x: caixa[0], y: caixa[3] + 8 * u, largura: Math.max(caixa[2] - caixa[0], 200 * u), mm: u, hachura: estilo.hachura });
+    // um layer por material, com a cor do material (as amostras da legenda também)
+    const camadasMat = new Set(geo.poligonos.map((p) => nomeCamada(camadaMaterial(p.solo, p.sec))));
+    leg.itens.forEach((it) => { if (it.t === 'poli' && it.hachura !== undefined && it.camada === 'LEGENDA' && it.fill && it.pts.length === 4) {
+      const e = legMat.find((q) => q.fill === it.fill); if (e) it.camada = camadaMaterial(e.solo, e.sec);
+    } });
+    // ponto de inserção de cada furo: topo do furo
+    const base = Object.fromEntries(bhs.map((b) => [`FURO:${b.name}`, [X(b.dist), Y(b.cota)]]));
+    emitir(w, [...itens, ...leg.itens], { mm: u, base, camadasMat });
+    topoPerfil = -caixa[1];
   }
 
   // ── PLANTA ── em metros reais, deslocada para ficar acima do perfil; o deslocamento vai anotado.
+  const furos = projeto.furos.map(resolverFuro);
   if (furos.length) {
     const xs = [...furos.map((b) => b.x), ...projeto.cortes.flatMap((c) => [c.p1[0], c.p2[0]])];
     const ys = [...furos.map((b) => b.y), ...projeto.cortes.flatMap((c) => [c.p1[1], c.p2[1]])];
     const extP = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 1);
     const up = escalaPadrao(extP * 1.2, 250) / 1000, pm = (v) => v * up;
-    const dX = -Math.min(...xs), dY = (temPerfil ? topoPerfil + uPerfil * 45 : 0) + pm(12) - Math.min(...ys);
+    const dX = -Math.min(...xs), dY = (temPerfil ? topoPerfil + u * 30 : 0) + pm(12) - Math.min(...ys);
     const T = (x, y) => [x + dX, y + dY];
     const topo = Math.max(...ys) + dY;
-    ent += D.text('PLANTA DE LOCACAO', 0, topo + pm(14), pm(4), 'LEGENDA', 0, 'l');
-    ent += D.text(`Coordenadas deslocadas: X real = X ${dX >= 0 ? '-' : '+'} ${Math.abs(dX).toFixed(3)} ; Y real = Y ${dY >= 0 ? '-' : '+'} ${Math.abs(dY).toFixed(3)}. Textos para plotar em 1:${Math.round(up * 1000)}.`, 0, topo + pm(9), pm(2.2), 'LEGENDA', 0, 'l');
+    ['PLANTA', 'PLANTA-FUROS', 'PLANTA-CORTES'].forEach((n) => { if (!w.layer(n)) w.addLayer(n, CAMADAS[n], 'CONTINUOUS'); });
+    const texto = (t, x, y, h, ly, al = 'l') => {
+      const o = { layerName: ly, horizontalAlignment: al === 'c' ? TextHorizontalAlignment.Center : TextHorizontalAlignment.Left, verticalAlignment: al === 'c' ? TextVerticalAlignment.Middle : TextVerticalAlignment.BaseLine, secondAlignmentPoint: point3d(x, y) };
+      w.addText(point3d(x, y), h, t, o).textStyle = ESTILO;
+    };
+    texto('PLANTA DE LOCAÇÃO', 0, topo + pm(14), pm(3.5), 'PLANTA');
+    texto(`Coordenadas deslocadas: X real = X ${dX >= 0 ? '−' : '+'} ${Math.abs(dX).toFixed(3)} ; Y real = Y ${dY >= 0 ? '−' : '+'} ${Math.abs(dY).toFixed(3)}. Textos para plotar em 1:${Math.round(up * 1000)}.`, 0, topo + pm(9), pm(2), 'PLANTA');
     furos.forEach((b) => {
       const [x, y] = T(b.x, b.y);
-      ent += D.circle(x, y, pm(1.2), 'FUROS');
-      ent += D.text(b.name, x + pm(2), y + pm(0.6), pm(2.5), 'FUROS_NOME', 0, 'l');
-      if (b.cota) ent += D.text(`${fmt(b.cota)} m`, x + pm(2), y - pm(2.6), pm(2), 'COTAS_Y', 0, 'l');
+      w.addCircle(point3d(x, y), pm(1.2), { layerName: 'PLANTA-FUROS' });
+      texto(b.name, x + pm(2), y + pm(0.6), pm(2.2), 'PLANTA-FUROS');
+      if (b.cota) texto(`${fmt(b.cota)} m`, x + pm(2), y - pm(2.6), pm(1.8), 'PLANTA-FUROS');
     });
     projeto.cortes.forEach((c) => {
       const [x1, y1] = T(...c.p1), [x2, y2] = T(...c.p2);
-      ent += D.line(x1, y1, x2, y2, 'CORTES');
+      w.addLine(point3d(x1, y1), point3d(x2, y2), { layerName: 'PLANTA-CORTES' });
       const [n1, n2] = c.nome.split('–');
       const len = Math.hypot(x2 - x1, y2 - y1) || 1, nx = (x2 - x1) / len, ny = (y2 - y1) / len;
       const px = -ny * c.lado, py = nx * c.lado;
-      ent += D.text(n1 || 'A', x1 - nx * pm(4), y1 - ny * pm(4), pm(3.5), 'CORTES', 0, 'm');
-      ent += D.text(n2 || "A'", x2 + nx * pm(4), y2 + ny * pm(4), pm(3.5), 'CORTES', 0, 'm');
-      [[x1, y1], [x2, y2]].forEach(([x, y]) => { ent += D.line(x, y, x + px * pm(5), y + py * pm(5), 'CORTES'); });
+      texto(n1 || 'A', x1 - nx * pm(4), y1 - ny * pm(4), pm(3), 'PLANTA-CORTES', 'c');
+      texto(n2 || "A'", x2 + nx * pm(4), y2 + ny * pm(4), pm(3), 'PLANTA-CORTES', 'c');
+      [[x1, y1], [x2, y2]].forEach(([x, y]) => w.addLine(point3d(x, y), point3d(x + px * pm(5), y + py * pm(5)), { layerName: 'PLANTA-CORTES' }));
     });
   }
+  return seqendUnico(w.stringify());
+}
 
-  let dxf = '0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n9\n$INSUNITS\n70\n6\n0\nENDSEC\n';
-  dxf += '0\nSECTION\n2\nTABLES\n';
-  const tr = uPerfil || 0.1;
-  dxf += '0\nTABLE\n2\nLTYPE\n70\n2\n0\nLTYPE\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0.0\n' +
-    `0\nLTYPE\n2\nTRACEJADA\n70\n0\n3\n__ __ __\n72\n65\n73\n2\n40\n${(3 * tr).toFixed(4)}\n49\n${(2 * tr).toFixed(4)}\n49\n${(-1 * tr).toFixed(4)}\n0\nENDTAB\n`;
-  dxf += '0\nTABLE\n2\nLAYER\n70\n' + LY.size + '\n';
-  LY.forEach((color, name) => { dxf += `0\nLAYER\n2\n${name}\n70\n0\n62\n${color}\n6\nCONTINUOUS\n`; });
-  dxf += '0\nENDTAB\n';
-  dxf += `0\nTABLE\n2\nSTYLE\n70\n1\n0\nSTYLE\n2\n${ESTILO}\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n2.5\n3\narial.ttf\n4\n\n0\nENDTAB\n`;
-  dxf += '0\nENDSEC\n0\nSECTION\n2\nENTITIES\n' + ent + '0\nENDSEC\n0\nEOF\n';
-  return dxf;
+/**
+ * A biblioteca escreve um SEQEND depois de cada ATTRIB; o DXF pede um só, no fim
+ * dos atributos do INSERT. Tira os SEQEND que têm outro ATTRIB logo depois.
+ */
+export function seqendUnico(txt) {
+  const ls = txt.split('\n');
+  const ents = []; // [início, fim) de cada objeto (grupo 0)
+  for (let i = 0; i + 1 < ls.length; i += 2) if (ls[i].trim() === '0') ents.push(i);
+  const fora = new Set();
+  for (let k = 0; k + 1 < ents.length; k++) {
+    if (ls[ents[k] + 1] === 'SEQEND' && ls[ents[k + 1] + 1] === 'ATTRIB' && k > 0 && ls[ents[k - 1] + 1] === 'ATTRIB') fora.add(k);
+  }
+  if (!fora.size) return txt;
+  const out = [];
+  ents.forEach((ini, k) => { if (!fora.has(k)) out.push(...ls.slice(ini, k + 1 < ents.length ? ents[k + 1] : ls.length)); });
+  return ls.slice(0, ents[0]).concat(out).join('\n');
 }

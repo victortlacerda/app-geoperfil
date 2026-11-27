@@ -6,7 +6,6 @@ import { furosNoCorte } from './geo/corte.js';
 import { criarPlanta } from './views/planta.js';
 import { criarCamadas } from './views/camadas.js';
 import { criarPerfil } from './views/perfil.js';
-import { gerarDXF } from './io/dxf.js';
 import { lerCSV, interpretarTabela, aplicarImportacao, MODELO_CSV, MODELO_XLSX } from './io/csv.js';
 import { baixar, lerTexto, lerXLSX, escreverXLSX, nomeArquivo } from './io/arquivos.js';
 import { corFuro, OK, ACCENT } from './styles/tema.js';
@@ -384,8 +383,9 @@ const acoes = {
   modeloCSV() { baixar('﻿' + MODELO_CSV, 'modelo_geoperfil.csv', 'text/csv;charset=utf-8'); },
   async modeloXLSX() { try { await escreverXLSX(MODELO_XLSX, 'modelo_geoperfil.xlsx'); } catch (e) { toast('Erro ao gerar o modelo: ' + e.message); } },
   fecharModal() { fecharModais(); },
-  dxf() {
+  async dxf() {
     if (!store.doc.furos.length) { toast('Nenhum furo lançado.'); return; }
+    const { gerarDXF } = await import('./io/dxf.js'); // carregado só quando usado
     const d = perfil.dados();
     const corte = app.corteAtivo();
     baixar(gerarDXF(store.doc, { ...d, corte }, ui.perfil.axis), nomeArquivo(`${store.doc.projeto.nome}${corte ? '_' + corte.nome : ''}`, 'dxf'), 'application/dxf');
