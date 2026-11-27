@@ -1,6 +1,7 @@
 import './styles/main.css';
 import { criarStore, lerAutosave } from './store.js';
-import { novoProjeto, projetoExemplo, novoFuro, proximoNome, profMax, num, camadasDoFuro, estiloPadrao } from './model/projeto.js';
+import { projetoDemo } from './model/demo.js';
+import { novoProjeto, novoFuro, proximoNome, profMax, num, camadasDoFuro, estiloPadrao } from './model/projeto.js';
 import { carregarProjeto, serializar } from './model/arquivo.js';
 import { furosNoCorte, perfilDoCorte } from './geo/corte.js';
 import { pranchaPadrao } from './geo/prancha.js';
@@ -25,7 +26,7 @@ const salvo = lerAutosave(storage);
 if (salvo) {
   try { inicial = carregarProjeto(salvo); } catch { avisosIniciais.push('O projeto salvo automaticamente não pôde ser lido; abrindo o exemplo.'); }
 }
-const store = criarStore(inicial || projetoExemplo(), { storage });
+const store = criarStore(inicial || projetoDemo(), { storage });
 
 // opções do modelo 3D ao abrir o app (o botão Redefinir volta a elas)
 const M3D_PADRAO = () => ({ exagero: 3, furos: true, spt: false, na: true, grama: true, cortar: true, raiox: false, grade: true, deslocamento: 0, ocultos: new Set(), opacidade: {} });
@@ -427,6 +428,10 @@ const acoes = {
     if (!confirm('Começar um projeto vazio? (Ctrl+Z desfaz)')) return;
     store.substituir(novoProjeto()); ui.corteId = null; planta.ajustar();
   },
+  exemplo() {
+    if (!confirm('Abrir o projeto de exemplo (10 furos, 2 sondagens mistas)? O projeto atual é substituído (Ctrl+Z desfaz).')) return;
+    store.substituir(projetoDemo()); ui.corteId = store.doc.cortes[0]?.id || null; planta.ajustar();
+  },
   abrir() { $('fileOpen').click(); },
   salvar() { store.salvarAgora(); baixar(serializar(store.doc), nomeArquivo(store.doc.projeto.nome, 'json'), 'application/json'); },
   importar() { $('csvModal').classList.add('open'); },
@@ -553,7 +558,7 @@ function toast(msg, ms = 3500) {
 // ── início ───────────────────────────────────────────────
 new ResizeObserver(() => render()).observe(document.querySelector('.center'));
 window.addEventListener('beforeunload', () => store.salvarAgora());
-ui.corteId = store.doc.cortes.at(-1)?.id ?? null;
+ui.corteId = store.doc.cortes[0]?.id ?? null;
 sincronizarFaixa();
 requestAnimationFrame(() => {
   render();

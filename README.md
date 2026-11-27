@@ -4,7 +4,7 @@
 
 Lance os furos na planta, preencha o boletim metro a metro e trace o corte. O GeoPerfil correlaciona as camadas entre os furos, desenha o perfil 2D com hachuras e monta o bloco geológico em 3D. Tudo sai pronto para o projeto: prancha A0 a A3 com vários cortes, planta-chave e carimbo, PDF do perfil em A3, boletim individual em PDF e DXF para o CAD.
 
-**[▶ Abrir o GeoPerfil](https://victortlacerda.github.io/app-geoperfil/)**: grátis, sem cadastro e sem instalar nada. O projeto de exemplo já vem carregado.
+**[▶ Abrir o GeoPerfil](https://victortlacerda.github.io/app-geoperfil/)**: grátis, sem cadastro e sem instalar nada. O projeto de exemplo já vem carregado: 10 furos numa encosta de gnaisse, duas sondagens mistas (SPT + rotativa) e matacões, com dois cortes prontos. O botão **Exemplo** abre de novo.
 
 [![Testes e deploy](https://github.com/victortlacerda/app-geoperfil/actions/workflows/pages.yml/badge.svg)](https://github.com/victortlacerda/app-geoperfil/actions/workflows/pages.yml)
 
