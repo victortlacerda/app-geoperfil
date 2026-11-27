@@ -45,7 +45,7 @@ Camadas de mesma classificação são correlacionadas entre furos vizinhos e lig
 
 ### Padrão de prancha
 
-As camadas podem ser coloridas pela textura ou pelo **horizonte** (aterro, colúvio/tálus, solo residual, rocha alterada, rocha fraturada, rocha sã), como nas pranchas de projeto. Pedregulho e blocos aparecem como matacões em volta do furo, o topo rochoso ganha a marcação em vermelho e as sondagens mistas mostram o N-SPT de um lado e a recuperação (REC %) do outro. Na janela **Desenho…** entram o NA de projeto, as linhas de referência (fundo de escavação, cota de assentamento) e o N-SPT em golpes/30 cm. A tela, o PDF, o DXF e o 3D saem do mesmo desenho.
+As camadas podem ser coloridas pelo **tipo de solo** ou pela **origem do solo** (aterro, colúvio/tálus, solo residual, rocha alterada, rocha fraturada, rocha sã), como nas pranchas de projeto. Pedregulho e blocos aparecem como matacões em volta do furo, o topo rochoso ganha a marcação em vermelho e as sondagens mistas mostram o N-SPT de um lado e a recuperação (REC %) do outro. Na janela **Desenho…** entram o NA de projeto, as linhas de referência (fundo de escavação, cota de assentamento) e o N-SPT em golpes/30 cm. A tela, o PDF, o DXF e o 3D saem do mesmo desenho.
 
 ![Perfil 2D colorido por horizonte, com blocos, topo rochoso, sondagens mistas, NA de projeto e fundo de escavação (dados de teste)](docs/img/perfil-horizonte.jpg)
 
