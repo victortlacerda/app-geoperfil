@@ -15,6 +15,16 @@
 import { buildZones, cotasContato, extensaoCotas } from './zonas.js';
 
 const chaveCamada = (l) => (l.solo ? `${l.solo.code}|${l.sec || ''}` : '∅');
+const semOrigem = (sec) => !sec || sec === '-' || sec === '—';
+/**
+ * Duas camadas se correlacionam quando têm o mesmo tipo de solo e a mesma origem,
+ * ou quando um dos furos não informou a origem (aí vale a do outro).
+ */
+export const mesmaCamada = (la, lb) => {
+  if (!la.solo || !lb.solo) return !la.solo && !lb.solo;
+  if (la.solo.code !== lb.solo.code) return false;
+  return semOrigem(la.sec) || semOrigem(lb.sec) || la.sec === lb.sec;
+};
 const meio = (b, l) => b.cota - (l.de + l.ate) / 2;
 
 /** Camadas do furo de cima para baixo, com as lacunas (sem classificação) explícitas. */
@@ -40,7 +50,7 @@ export function correlacionar(A, B, La = camadasContinuas(A), Lb = camadasContin
   for (let i = 0; i <= n; i++) for (let j = 0; j <= m; j++) {
     if (!i || !j) { T[i][j] = { n: 0, c: 0, de: null }; continue; }
     let r = melhor({ n: T[i - 1][j].n, c: T[i - 1][j].c, de: [i - 1, j] }, { n: T[i][j - 1].n, c: T[i][j - 1].c, de: [i, j - 1] });
-    if (chaveCamada(La[i - 1]) === chaveCamada(Lb[j - 1])) {
+    if (mesmaCamada(La[i - 1], Lb[j - 1])) {
       const base = T[i - 1][j - 1];
       r = melhor({ n: base.n + 1, c: base.c + Math.abs(meio(A, La[i - 1]) - meio(B, Lb[j - 1])), de: [i - 1, j - 1], par: true }, r);
     }
@@ -74,7 +84,9 @@ export function sequenciaDoVao(A, B, ajustes = {}) {
   pares.forEach(([pa, pb]) => {
     while (ia < pa) soA(ia++, false);
     while (ib < pb) soB(ib++, false);
-    seq.push({ tipo: 'M', l: La[pa], lb: Lb[pb], hA: La[pa].ate - La[pa].de, hB: Lb[pb].ate - Lb[pb].de });
+    // sem origem de um lado: a camada desenhada leva a origem do outro furo
+    const lM = semOrigem(La[pa].sec) && !semOrigem(Lb[pb].sec) ? { ...La[pa], sec: Lb[pb].sec } : La[pa];
+    seq.push({ tipo: 'M', l: lM, lb: Lb[pb], hA: La[pa].ate - La[pa].de, hB: Lb[pb].ate - Lb[pb].de });
     ia = pa + 1; ib = pb + 1;
   });
   while (ia < La.length) soA(ia++, true);

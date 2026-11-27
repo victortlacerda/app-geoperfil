@@ -25,6 +25,18 @@ describe('correlação de camadas', () => {
     expect(correlacionar(A, B)).toEqual([[2, 1]]);
   });
 
+  it('mesmo tipo de solo se liga quando um dos furos não tem a origem informada', () => {
+    const A = furo('A', 0, 840, [[0, 2, 'ARGS', 'ATR'], [2, 7, 'SAG', 'RES'], [7, 10, 'ARE', 'RES']]);
+    const B = furo('B', 40, 845, [[0, 5, 'ARGS', ''], [5, 15, 'SAG', '-']]);
+    expect(correlacionar(A, B)).toEqual([[0, 0], [1, 1]]);
+    const g = geometriaPerfil([A, B]);
+    expect(g.poligonos.map((p) => `${p.solo.code}/${p.sec}`)).toEqual(['ARGS/ATR', 'SAG/RES', 'ARE/RES']);
+    expect(g.pontas.filter((p) => p.tipo === 'T')).toHaveLength(0); // sem transição lateral
+    // origens diferentes e informadas dos dois lados continuam sem se ligar
+    const C = furo('C', 40, 845, [[0, 5, 'ARGS', 'COL'], [5, 15, 'SAG', 'RES']]);
+    expect(correlacionar(A, C)).toEqual([[1, 1]]);
+  });
+
   it('lacunas sem classificação viram uma camada vazia', () => {
     const A = furo('A', 0, 100, [[3, 6, 'SAR']]);
     expect(camadasContinuas(A).map((l) => (l.solo ? l.solo.code : '∅'))).toEqual(['∅', 'SAR']);
