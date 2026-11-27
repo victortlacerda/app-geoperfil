@@ -202,6 +202,38 @@ export function criarModelo3D(app) {
       raiz.add(malha(posGrade(m.na), idx, mat, { na: true }));
       raiz.add(linha(borda.map(([i, j]) => P(xs[i], ys[j], m.na[k(i, j)])), AZUL, 'm', 0.95));
     }
+
+    // níveis de projeto (os mesmos do Perfil 2D): NA de projeto e linhas de referência,
+    // como planos horizontais dentro do solo, com a linha nas paredes e o nome no canto
+    niveisProjeto().forEach((nv) => {
+      const dentro = (q) => nv.cota <= contatos[0][q] + 1e-6 && nv.cota >= contatos[nU][q] - 1e-6;
+      const idx = [];
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const a = k(i, j), b = k(i + 1, j), c = k(i, j + 1), d = k(i + 1, j + 1);
+        if (dentro(a) || dentro(b) || dentro(c)) idx.push(a, c, b);
+        if (dentro(b) || dentro(c) || dentro(d)) idx.push(b, c, d);
+      }
+      if (!idx.length) return;
+      const plano = new Float32Array(N1 * (ny + 1)).fill(nv.cota);
+      const mat = new THREE.MeshStandardMaterial({ color: nv.cor, transparent: true, opacity: nv.opac, side: THREE.DoubleSide, depthWrite: false, clippingPlanes: clip('m') });
+      raiz.add(malha(posGrade(plano), idx, mat, { nivel: nv.nome }));
+      // linha nas paredes, só onde o nível corta o solo
+      let trecho = [];
+      const fecha = () => { if (trecho.length > 1) raiz.add(linha(trecho, nv.cor, 'm', 1)); trecho = []; };
+      borda.forEach(([i, j]) => { if (dentro(k(i, j))) trecho.push(P(xs[i], ys[j], nv.cota)); else fecha(); });
+      fecha();
+      const q0 = borda.find(([i, j]) => dentro(k(i, j)));
+      if (q0) rotulo(texto(nv.rotulo, { tamanho: 0.75, cor: nv.corTexto }), xs[q0[0]], ys[q0[1]], nv.cota, 0.6);
+    });
+  }
+
+  /** NA de projeto e linhas de referência do projeto (janela Desenho…). */
+  function niveisProjeto() {
+    const p = app.store.doc.projeto, lista = [];
+    const f2 = (v) => v.toFixed(2).replace('.', ',');
+    if (o.na && Number.isFinite(p.naProjeto)) lista.push({ nome: 'NA de projeto', cota: p.naProjeto, cor: '#00B4D8', corTexto: '#00799A', opac: 0.22, rotulo: `NA de projeto ${f2(p.naProjeto)}` });
+    (p.referencias || []).forEach((rf) => { if (Number.isFinite(rf.cota)) lista.push({ nome: rf.nome, cota: rf.cota, cor: '#3a3a3a', corTexto: '#1a1a1a', opac: 0.12, rotulo: `${rf.nome} ${f2(rf.cota)}` }); });
+    return lista;
   }
 
   // ── face do corte ──
@@ -231,6 +263,13 @@ export function criarModelo3D(app) {
     });
     raiz.add(linha(am.map((p) => P(p.x, p.y, p.contatos[0])), LINHA, 's', 0.9));
     if (o.na && m.na) raiz.add(linha(am.map((p) => P(p.x, p.y, p.na)), AZUL, 's', 1));
+    // níveis de projeto também na face do corte, só dentro do solo
+    niveisProjeto().forEach((nv) => {
+      let trecho = [];
+      const fecha = () => { if (trecho.length > 1) raiz.add(linha(trecho, nv.cor, 's', 1)); trecho = []; };
+      am.forEach((p) => { if (nv.cota <= p.contatos[0] && nv.cota >= p.contatos.at(-1)) trecho.push(P(p.x, p.y, nv.cota)); else fecha(); });
+      fecha();
+    });
     return am;
   }
 
