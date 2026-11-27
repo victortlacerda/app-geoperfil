@@ -182,7 +182,9 @@ export function criarCamadas(app) {
   function marcarArraste() {
     body.querySelectorAll('tr[data-m]').forEach((tr) => {
       const m = +tr.dataset.m;
-      tr.classList.toggle('fill-sel', !!arraste && m >= Math.min(arraste.de, arraste.ate) && m <= Math.max(arraste.de, arraste.ate));
+      const dentro = !!arraste && m >= Math.min(arraste.de, arraste.ate) && m <= Math.max(arraste.de, arraste.ate);
+      // só a coluna arrastada (primária ou secundária) fica marcada
+      tr.querySelectorAll('td.cls-cell').forEach((td) => td.classList.toggle('fill-sel', dentro && !!td.querySelector(`[data-handle="${arraste.col}"]`)));
     });
   }
 
