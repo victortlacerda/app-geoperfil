@@ -61,4 +61,19 @@ describe('desenharPerfil', () => {
     const nomes = leg.map((e) => e.texto);
     expect(nomes).toEqual(expect.arrayContaining(['Aterro', 'Solo residual', 'Rocha sã', 'Pedregulho / blocos', 'Topo rochoso', 'Nível d\'água de projeto']));
   });
+
+  it('origem não informada: tracejado no furo, asterisco no rótulo e nota na legenda', () => {
+    const fs = [
+      novoFuro({ id: 'a', nome: 'SP-04', x: 0, y: 0, cota: 50, profTotal: 4, metros: metros([[1, 'ARGS', 'ATR', 3], [2, null, null, 4], [3, 'SAG', 'RES', 8], [4, null, null, 10]]) }),
+      novoFuro({ id: 'b', nome: 'SP-06', x: 20, y: 0, cota: 51, profTotal: 4, metros: metros([[1, 'ARGS', '-', 2], [2, null, null, 3], [3, 'SAG', '-', 9], [4, null, null, 12]]) }),
+    ];
+    const c = { id: 'c', nome: 'B', p1: [-1, 0], p2: [21, 0], lado: 1, faixa: 5 };
+    const b2 = perfilDoCorte(c, fs), g2 = geometriaPerfil(b2, {});
+    const { itens: it2 } = desenharPerfil({ bhs: b2, geo: g2, corte: c, estilo: {}, axis: 'cota', mm: 1,
+      X: (d) => 20 + d * 5, Y: (cc) => 20 + (52 - cc) * 10, janela: { d0: -1, d1: 21, c0: 46, c1: 52 }, cTopo: 52, mostrar: { rotulos: true } });
+    expect(it2.filter((i) => i.camada === 'ORIGEM-NAO-INFORMADA')).toHaveLength(2);
+    expect(it2.some((i) => i.t === 'texto' && i.txt === 'Solo residual*')).toBe(true);
+    const leg = legendaPerfil(b2, g2, {});
+    expect(leg.some((e) => /Sem origem no boletim \(SP-06\)/.test(e.texto))).toBe(true);
+  });
 });

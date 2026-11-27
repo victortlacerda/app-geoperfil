@@ -32,6 +32,9 @@ describe('correlação de camadas', () => {
     const g = geometriaPerfil([A, B]);
     expect(g.poligonos.map((p) => `${p.solo.code}/${p.sec}`)).toEqual(['ARGS/ATR', 'SAG/RES', 'ARE/RES']);
     expect(g.pontas.filter((p) => p.tipo === 'T')).toHaveLength(0); // sem transição lateral
+    // a origem adotada fica marcada no furo que não informou
+    expect(g.poligonos.filter((p) => p.inferida).map((p) => p.inferida.furo)).toEqual(['B', 'B']);
+    expect(g.poligonos.find((p) => p.solo.code === 'ARE').inferida).toBeUndefined();
     // origens diferentes e informadas dos dois lados continuam sem se ligar
     const C = furo('C', 40, 845, [[0, 5, 'ARGS', 'COL'], [5, 15, 'SAG', 'RES']]);
     expect(correlacionar(A, C)).toEqual([[1, 1]]);

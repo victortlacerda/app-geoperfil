@@ -85,8 +85,11 @@ export function sequenciaDoVao(A, B, ajustes = {}) {
     while (ia < pa) soA(ia++, false);
     while (ib < pb) soB(ib++, false);
     // sem origem de um lado: a camada desenhada leva a origem do outro furo
-    const lM = semOrigem(La[pa].sec) && !semOrigem(Lb[pb].sec) ? { ...La[pa], sec: Lb[pb].sec } : La[pa];
-    seq.push({ tipo: 'M', l: lM, lb: Lb[pb], hA: La[pa].ate - La[pa].de, hB: Lb[pb].ate - Lb[pb].de });
+    // (`inferida` marca o furo que não informou: 'A' ou 'B')
+    const semA = semOrigem(La[pa].sec), semB = semOrigem(Lb[pb].sec);
+    const inferida = La[pa].solo && semA !== semB ? (semA ? 'A' : 'B') : null;
+    const lM = semA && !semB ? { ...La[pa], sec: Lb[pb].sec } : La[pa];
+    seq.push({ tipo: 'M', l: lM, lb: Lb[pb], inferida, hA: La[pa].ate - La[pa].de, hB: Lb[pb].ate - Lb[pb].de });
     ia = pa + 1; ib = pb + 1;
   });
   while (ia < La.length) soA(ia++, true);
@@ -292,7 +295,13 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
       const baixo = tt.map((t) => [D(t), cache.get(`${t}${lado}`)[k].base]).reverse();
       const tm = it.tipo === 'M' ? 0.5 : (t0 + t1) / 2;
       const em = pilha(tm, lado)[k];
-      if (it.l.solo) poligonos.push({ solo: it.l.solo, sec: it.l.sec, pts: [...cima, ...baixo], nTopo: cima.length, rotulo: { d: D(tm), c: (em.topo + em.base) / 2, h: em.topo - em.base } });
+      // origem que veio do furo vizinho: onde ela falta (no furo que não informou)
+      let inferida;
+      if (it.tipo === 'M' && it.inferida) {
+        const t = it.inferida === 'A' ? 0 : 1, p = cache.get(`${t}-`)[k];
+        inferida = { furo: (it.inferida === 'A' ? A : B).name, d: D(t), topo: p.topo, base: p.base };
+      }
+      if (it.l.solo) poligonos.push({ solo: it.l.solo, sec: it.l.sec, pts: [...cima, ...baixo], nTopo: cima.length, rotulo: { d: D(tm), c: (em.topo + em.base) / 2, h: em.topo - em.base }, ...(inferida ? { inferida } : {}) });
       if (it.tipo !== 'M' && it.l.solo && !it.grupo) {
         const tp = it.ponta, c = cache.get(`${tp}${lado}`)[k].topo;
         pontas.push({ chave: it.chave, d: D(tp), c, ponta: tp, padrao: it.padrao, tipo: it.tipo, vao: [dA, dB], codigo: it.l.solo.code });

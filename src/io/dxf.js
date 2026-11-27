@@ -44,7 +44,7 @@ export function aciProxima(hex) {
 const CAMADAS = {
   'PERFIL-GRADE': 8, 'PERFIL-EIXOS': 7, CONTATOS: 7, TERRENO: 7, NA: 5, 'NA-PROJETO': 4, REFERENCIAS: 7, 'TOPO-ROCHOSO': 1,
   BLOCOS: 8, ROTULOS: 7, SONDAGEM: 7, CORTE: 5, TITULO: 7, LEGENDA: 7, HACHURA: 8, PLANTA: 7, 'PLANTA-FUROS': 7, 'PLANTA-CORTES': 1,
-  MOLDURA: 7, CARIMBO: 7, NOTAS: 7,
+  MOLDURA: 7, CARIMBO: 7, NOTAS: 7, 'ORIGEM-NAO-INFORMADA': 30,
 };
 const nomeCamada = (n) => String(n || '0').replace(/[<>/\\":;?*|=`,]/g, ' ').trim() || '0';
 

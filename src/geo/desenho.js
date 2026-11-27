@@ -16,7 +16,7 @@ import { niceStep } from './zonas.js';
 import { secLabel, rotuloCurto, ehHorizonte, ROCHA_SA, codigoHorizonte, solo as soloDe } from '../model/catalogo.js';
 
 export const CORES = {
-  tinta: '#1a1a1a', cinza: '#6e6e69', grade: '#b8b8b2', contorno: '#2b2b2b',
+  tinta: '#1a1a1a', cinza: '#6e6e69', aviso: '#C25E00', grade: '#b8b8b2', contorno: '#2b2b2b',
   na: '#1566D1', naProjeto: '#00B4D8', vermelho: '#C62828', azul: '#1566D1', bloco: '#ABABAB',
 };
 
@@ -189,11 +189,21 @@ export function desenharPerfil(P) {
   if (mostrar.rotulos) geo.poligonos.forEach((p) => {
     const h = Math.abs(Y(p.rotulo.c - p.rotulo.h / 2) - Y(p.rotulo.c + p.rotulo.h / 2)) / mm;
     if (h < 3.4) return;
-    const x = X(p.rotulo.d), y = Y(p.rotulo.c), sec = ehHorizonte(p.solo.code) ? '' : secLabel(p.sec);
+    const x = X(p.rotulo.d), y = Y(p.rotulo.c), sec = ehHorizonte(p.solo.code) ? '' : secLabel(p.sec) + (p.inferida ? '*' : '');
     if (sec && h > 7.5) {
       add({ t: 'texto', x, y: y - 1.5 * mm, txt: rotuloCurto(p.solo), h: 2.6, al: 'c', vb: 'meio', cor: CORES.tinta, bold: true, fundo: '#ffffff', camada: 'ROTULOS', clip: true });
       add({ t: 'texto', x, y: y + 1.7 * mm, txt: sec, h: 2.2, al: 'c', vb: 'meio', cor: CORES.tinta, fundo: '#ffffff', camada: 'ROTULOS', clip: true });
     } else add({ t: 'texto', x, y, txt: rotuloCurto(p.solo), h: 2.6, al: 'c', vb: 'meio', cor: CORES.tinta, bold: true, fundo: '#ffffff', camada: 'ROTULOS', clip: true });
+  });
+
+  // origem não informada no boletim: tracejado ao lado da coluna do furo, no trecho da camada
+  const marcados = new Set();
+  geo.poligonos.forEach((p) => {
+    const m = p.inferida; if (!m) return;
+    const k = `${m.furo}|${m.topo.toFixed(3)}|${m.base.toFixed(3)}`; if (marcados.has(k)) return;
+    marcados.add(k);
+    const x = X(m.d) - 1.2 * mm - 1.1 * mm;
+    add({ t: 'linha', pts: [[x, Y(m.topo) + 0.4 * mm], [x, Y(m.base) - 0.4 * mm]], cor: CORES.aviso, lw: 0.6, dash: [1.2, 0.8], camada: 'ORIGEM-NAO-INFORMADA' });
   });
 
   // ── furos ──
@@ -303,6 +313,8 @@ export function legendaPerfil(bhs, geo, { estilo = {}, naProjeto = null, referen
   const itens = [...vistos.values()];
   if (bhs.some((b) => (b.blocos || []).length)) itens.push({ tipo: 'bloco', fill: soloDe(codigoHorizonte('PED')).fill, texto: 'Pedregulho / blocos' });
   if ((geo?.poligonos || []).some((p) => p.sec === ROCHA_SA || p.solo.horizonte === ROCHA_SA)) itens.push({ tipo: 'rocha', cor: CORES.vermelho, texto: 'Topo rochoso' });
+  const semOrigemEm = [...new Set((geo?.poligonos || []).filter((p) => p.inferida).map((p) => p.inferida.furo))];
+  if (semOrigemEm.length) itens.push({ tipo: 'linha', cor: CORES.aviso, dash: [1, 0.8], lw: 0.45, texto: `* Sem origem no boletim (${semOrigemEm.join(', ')}): adotada a do furo vizinho` });
   itens.push({ tipo: 'linha', cor: CORES.tinta, lw: 0.5, texto: 'Terreno' });
   if (mostrar.na !== false && (geo?.na || []).length > 1) itens.push({ tipo: 'linha', cor: CORES.na, dash: [2, 1], lw: 0.3, texto: "Nível d'água medido" });
   if (naProjeto !== null && Number.isFinite(naProjeto)) itens.push({ tipo: 'linha', cor: CORES.naProjeto, lw: 0.35, texto: "Nível d'água de projeto" });
