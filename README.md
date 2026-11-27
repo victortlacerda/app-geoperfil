@@ -148,3 +148,4 @@ Tudo em metros. `x` = Leste e `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` qua
 - [x] Fase 5b — Padrão de prancha (cores por horizonte, blocos, topo rochoso, sondagem mista, NA de projeto, DXF 2007 com blocos e atributos, prancha A0–A3)
 - [ ] Fase 6 — Classificação SUCS e integração com os apps de fundações
 - [ ] Fase 7 — Implantação: terraplenagem (platôs, taludes, topografia importada, volumes de corte e aterro), prédio no 3D (andares ou altura), fundações (estacas e sapatas por tabela ou por blocos posicionados no DXF, cota absoluta ou relativa ao terreno) e etapas que se ligam e desligam no 3D, no 2D e na prancha
+- [ ] Fase 8 — Celular: layout e gestos de toque, boletim metro a metro em campo, furo lançado pelo GPS, foto da caixa de testemunho, app instalável que funciona sem internet e compartilhamento de PDF/DXF pelo celular
