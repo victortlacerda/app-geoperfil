@@ -87,3 +87,21 @@ describe('aplicação da importação', () => {
     expect(sptPorMetro(sp1)).toEqual({ 1: 3, 2: 4 });
   });
 });
+
+describe('importação de sondagem mista', () => {
+  it('lê REC, RQD e critério de parada; o furo vira misto', () => {
+    const p = { projeto: { crs: 'local' }, furos: [], cortes: [], cores: {} };
+    const furos = interpretarTabela([['furo', 'x', 'y', 'cota', 'prof_total', 'parada'], ['SM-01', '0', '0', '900', '20', 'Profundidade de projeto'], ['SP-01', '10', '0', '901', '12', 'Impenetrável à percussão']]).registros;
+    const camadas = interpretarTabela([['furo', 'de', 'ate', 'primario', 'secundario'], ['SM-01', '0', '15', 'SAR', 'RES'], ['SM-01', '15', '20', 'ROC', 'RAL']]).registros;
+    const spt = interpretarTabela([['furo', 'prof', 'nspt', 'REC (%)', 'RQD (%)'], ['SM-01', '15', '30/9', '', ''], ['SM-01', '16', '', '45', '10'], ['SM-01', '17', '', '80%', '55']]).registros;
+    aplicarImportacao(p, [...furos, ...camadas, ...spt]);
+    const sm = p.furos.find((f) => f.nome === 'SM-01'), sp = p.furos.find((f) => f.nome === 'SP-01');
+    expect(sm.mista).toBe(true);
+    expect(sp.mista).toBeUndefined();
+    expect(sm.parada).toBe('projeto');
+    expect(sp.parada).toBe('imp_percussao');
+    expect(sm.metros.find((m) => m.m === 16)).toMatchObject({ rec: '45', rqd: '10' });
+    expect(sm.metros.find((m) => m.m === 17).rec).toBe('80');
+    expect(sm.metros.find((m) => m.m === 16).codigo).toBe('ROC');
+  });
+});

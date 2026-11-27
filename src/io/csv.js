@@ -1,7 +1,7 @@
 // Importação de sondagens a partir de CSV ou de planilhas (linhas já lidas).
 // As colunas são reconhecidas pelo cabeçalho; a coluna "furo" é obrigatória.
 import { novoFuro, setCampoMetro, aplicarCamadas, camadasDoFuro, textoSPTValido, num } from '../model/projeto.js';
-import { soloPorCodigo, secPorValor } from '../model/catalogo.js';
+import { soloPorCodigo, secPorValor, PARADAS } from '../model/catalogo.js';
 import { geoParaUtm, ehGeorreferenciado, utmPlausivel, FUSO_PADRAO } from '../geo/coordenadas.js';
 import { garantirUTM } from './geo.js';
 
@@ -21,6 +21,9 @@ const ALIASES = {
   desc: ['descricao', 'desc', 'descricao_tatil_visual', 'observacao'],
   prof: ['prof', 'profundidade', 'metro', 'cota_spt', 'prof_m'],
   nspt: ['nspt', 'n_spt', 'spt', 'n_golpes'],
+  rec: ['rec', 'recuperacao', 'rec_pct', 'recuperacao_pct'],
+  rqd: ['rqd', 'rqd_pct'],
+  parada: ['parada', 'criterio_de_parada', 'criterio_parada', 'criterio'],
 };
 
 export const normalizarCabecalho = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -95,6 +98,11 @@ export function aplicarImportacao(projeto, registros) {
     if (!f) { f = novoFuro({ nome }); projeto.furos.push(f); furoPorNome.set(nome, f); res.furosNovos++; semCoord.add(nome); }
     else if (existentes.has(nome)) res.furosAtualizados.add(nome);
 
+    if (r.parada) {
+      const t = normalizarCabecalho(r.parada);
+      const p = PARADAS.find((q) => q.value && (q.value === t || normalizarCabecalho(q.label) === t));
+      if (p) f.parada = p.value;
+    }
     for (const campo of ['x', 'y', 'cota', 'na', 'profTotal']) {
       if (r[campo] === undefined) continue;
       const v = num(r[campo], NaN);
@@ -126,6 +134,13 @@ export function aplicarImportacao(projeto, registros) {
       if (!Number.isFinite(prof)) semProf.push(idx + 1);
       else if (!textoSPTValido(r.nspt)) sptInvalido.push(idx + 1);
       else { setCampoMetro(f, Math.max(1, Math.round(prof)), 'spt', r.nspt.replace(/\s+/g, '')); res.spt++; }
+    }
+    // rotativa: recuperação e RQD por metro (o furo vira sondagem mista)
+    for (const campo of ['rec', 'rqd']) {
+      if (r[campo] === undefined) continue;
+      const prof = num(r.prof, NaN), v = num(String(r[campo]).replace('%', ''), NaN);
+      if (!Number.isFinite(prof)) semProf.push(idx + 1);
+      else if (Number.isFinite(v) && v >= 0 && v <= 100) { setCampoMetro(f, Math.max(1, Math.round(prof)), campo, String(v)); f.mista = true; }
     }
   });
 
@@ -173,5 +188,5 @@ export const MODELO_CSV = [
 export const MODELO_XLSX = {
   furos: [['furo', 'x', 'y', 'cota', 'na', 'prof_total'], ['SP-01', 333120.45, 7394210.8, 842.5, 3.2, 15], ['SP-02', 333195.1, 7394218.3, 839, 2.8, 12]],
   camadas: [['furo', 'de', 'ate', 'primario', 'secundario'], ['SP-01', 0, 2, 'ARGS', 'ATR'], ['SP-01', 2, 6, 'ARGA', 'RES'], ['SP-02', 0, 1.5, 'ARGS', 'ATR']],
-  spt: [['furo', 'prof', 'nspt'], ['SP-01', 1, 3], ['SP-01', 2, 4], ['SP-02', 1, 2]],
+  spt: [['furo', 'prof', 'nspt', 'rec', 'rqd'], ['SP-01', 1, 3, '', ''], ['SP-01', 2, 4, '', ''], ['SP-02', 1, 2, '', ''], ['SM-01', 16, '', 85, 60]],
 };

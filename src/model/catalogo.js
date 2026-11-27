@@ -9,6 +9,8 @@ export const SOLOS = [
   { code: 'ARS', label: 'ARS — Areia siltosa', fill: '#C0DD97', hatch: 'areia', hex: '#27500A' },
   { code: 'ARE', label: 'ARE — Areia', fill: '#97C459', hatch: 'areia', hex: '#173404' },
   { code: 'ARP', label: 'ARP — Areia c/ pedregulho', fill: '#EEEDFE', hatch: 'pedregulho', hex: '#534AB7' },
+  // rocha (trechos de rotativa): a secundária diz o grau (alterada, fraturada, sã)
+  { code: 'ROC', label: 'ROC — Rocha', fill: '#CDD2DA', hatch: '', hex: '#4A5568' },
 ];
 
 // Classificação secundária = origem / horizonte geotécnico. Cada horizonte tem uma cor
