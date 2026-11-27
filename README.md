@@ -39,7 +39,7 @@ A coluna do furo é desenhada enquanto você digita. O N-SPT pode ser lançado m
 
 ## Perfil 2D com contatos interpolados
 
-Camadas de mesma classificação são correlacionadas entre furos vizinhos e ligadas em linha reta. Uma camada que só existe num furo acunha no meio do vão, e um trecho sem correlação vira transição lateral. Se a interpretação pedir, use **Ajustar contatos**: as alças ◆ movem para os lados as pontas das cunhas e as transições, e a alça ●, que aparece ao passar o mouse num contato, sobe ou desce esse contato entre os furos para mudar a espessura das camadas (nos furos vale o boletim); o ajuste fica salvo no corte e vai junto para o PDF e o DXF. O desenho pode ser **Interpolado** (contatos em linha reta), **Suave** (terreno, NA e contatos em curva, que passam pelos furos sem ultrapassar os valores deles) ou **Degrau** (troca de material no meio do vão), escolhido por corte.
+Camadas de mesma classificação são correlacionadas entre furos vizinhos e ligadas em linha reta. Se um dos furos não informou a origem (classificação secundária), a camada se liga mesmo assim, adota a origem do vizinho e o desenho avisa: tracejado laranja ao lado do furo, asterisco no rótulo e nota na legenda. Uma camada que só existe num furo acunha no meio do vão, e um trecho sem correlação vira transição lateral. Se a interpretação pedir, use **Ajustar contatos**: as alças ◆ movem para os lados as pontas das cunhas e as transições, e a alça ●, que aparece ao passar o mouse num contato, sobe ou desce esse contato entre os furos para mudar a espessura das camadas (nos furos vale o boletim); o ajuste fica salvo no corte e vai junto para o PDF e o DXF. O desenho pode ser **Interpolado** (contatos em linha reta), **Suave** (terreno, NA e contatos em curva, que passam pelos furos sem ultrapassar os valores deles) ou **Degrau** (troca de material no meio do vão), escolhido por corte.
 
 ![Perfil 2D do corte A–A' com hachuras, régua de N-SPT, NA e legenda](docs/img/perfil-2d.jpg)
 
@@ -57,7 +57,7 @@ Um bloco geológico sólido montado a partir dos furos **e dos perfis 2D**. Ao l
 |---|---|
 | ![Bloco geológico inteiro com grama no topo e camadas nas paredes](docs/img/modelo-3d-bloco.jpg) | ![Face do corte com os furos SP-01, SP-02 e SP-03 e o N-SPT](docs/img/modelo-3d-face.jpg) |
 
-Também tem exagero vertical, raio-X para ver os furos por dentro e transparência e visibilidade por classificação. Há ainda régua de cotas, coordenadas e norte. Passando o mouse, aparecem a camada e a cota daquele ponto, e a vista pode ser salva em imagem.
+Também tem exagero vertical, raio-X para ver os furos por dentro e transparência e visibilidade por classificação. Há ainda régua de cotas, coordenadas e norte, e o NA de projeto e as linhas de referência (como o fundo de escavação) aparecem como planos dentro do bloco. Passando o mouse, aparecem a camada e a cota daquele ponto, e a vista pode ser salva em imagem.
 
 ## Pronto para entregar
 
@@ -89,7 +89,7 @@ O botão **Prancha** monta a folha com os cortes escolhidos, todos na mesma esca
 | GeoJSON e KML (pontos) | PDF da prancha (A0 a A3), do perfil (A3) e do boletim |
 | Projeto GeoPerfil (JSON) | GeoJSON e KML (Google Earth), projeto em JSON, imagem do modelo 3D |
 
-A importação reconhece os cabeçalhos `furo, x, y, lat, lon, cota, na, prof_total, de, ate, primario, secundario, descricao, prof, nspt`. Modelos de CSV e XLSX podem ser baixados dentro do app.
+A importação reconhece os cabeçalhos `furo, x, y, lat, lon, cota, na, prof_total, parada, de, ate, primario, secundario, descricao, prof, nspt, rec, rqd`. Um furo com REC na planilha entra como sondagem mista, e os trechos de rotativa usam a classificação primária ROC (rocha) com a secundária dizendo o grau (alterada, fraturada, sã ou matacão). Modelos de CSV e XLSX podem ser baixados dentro do app.
 
 ## Desenvolvimento
 
@@ -147,3 +147,4 @@ Tudo em metros. `x` = Leste e `y` = Norte (UTM SIRGAS 2000 no fuso `fusoUTM` qua
 - [x] Fase 5 — Modelo 3D com three.js (bloco geológico interpolado, ligado ao Perfil 2D, corte no alinhamento do corte ativo)
 - [x] Fase 5b — Padrão de prancha (cores por horizonte, blocos, topo rochoso, sondagem mista, NA de projeto, DXF 2007 com blocos e atributos, prancha A0–A3)
 - [ ] Fase 6 — Classificação SUCS e integração com os apps de fundações
+- [ ] Fase 7 — Implantação: terraplenagem (platôs, taludes, topografia importada, volumes de corte e aterro), prédio no 3D (andares ou altura), fundações (estacas e sapatas por tabela ou por blocos posicionados no DXF, cota absoluta ou relativa ao terreno) e etapas que se ligam e desligam no 3D, no 2D e na prancha
