@@ -19,6 +19,7 @@ export function criarPerfil(app) {
   const canvas = document.getElementById('profileCanvas');
   const o = app.ui.perfil; // { axis, showNA, showLab, showSPT, showHatch, zoom, panX }
   let W = 0, H = 0, bhs = [], ext = { minCota: 0, maxCota: 1 }, geo = null;
+  let pertoV = null; // alça vertical do contato mais perto do mouse (só ela aparece)
   let arrasteP = null; // alça de acunhamento sendo arrastada: { chave, vao, tipo, t }
 
   const ppW = () => W - PML - PMR, ppH = () => H - PMT - PMB;
@@ -74,7 +75,7 @@ export function criarPerfil(app) {
       naProjeto: cfg.naProjeto, referencias: cfg.referencias || [],
     });
     renderCanvas(ctx, itens, MM, [PML, PMT, PML + ppW(), PMT + ppH()]);
-    if (o.editar && app.corteAtivo()?.modo !== 'degrau') geo.pontas.forEach((pt) => {
+    if (o.editar && app.corteAtivo()?.modo !== 'degrau') geo.pontas.filter(alcaVisivel).forEach((pt) => {
       const x = pwx(pt.d), y = pwy(pt.c), mexida = Math.abs(pt.ponta - pt.padrao) > 1e-6, ativa = arrasteP?.chave === pt.chave;
       if (pt.tipo === 'V') {
         // alça vertical: círculo com setas para cima e para baixo
@@ -136,7 +137,28 @@ export function criarPerfil(app) {
   thumb.addEventListener('mousedown', (e) => { tDrag = { x: e.clientX, p: o.panX }; thumb.classList.add('dragging'); e.preventDefault(); });
   function pontaEm(cx, cy) {
     if (!o.editar || app.corteAtivo()?.modo === 'degrau' || !geo) return null;
-    return geo.pontas.find((pt) => Math.hypot(pwx(pt.d) - cx, pwy(pt.c) - cy) <= 9) || null;
+    return geo.pontas.filter(alcaVisivel).find((pt) => Math.hypot(pwx(pt.d) - cx, pwy(pt.c) - cy) <= 9) || null;
+  }
+  // alças ● (contatos na vertical): só a do contato mais perto do mouse, a que está
+  // sendo arrastada e as que já foram mexidas; as ◆ aparecem sempre
+  function alcaVisivel(pt) {
+    if (pt.tipo !== 'V') return true;
+    return pt.chave === pertoV || pt.chave === arrasteP?.chave || Math.abs(pt.ponta) > 1e-6;
+  }
+  function contatoPerto(cx, cy) {
+    let melhor = null, dm = 10; // px
+    geo?.pontas.forEach((pt) => {
+      if (pt.tipo !== 'V') return;
+      const dAlca = Math.hypot(pwx(pt.d) - cx, pwy(pt.c) - cy);
+      if (dAlca <= 14 && dAlca - 4 < dm) { dm = dAlca - 4; melhor = pt.chave; }
+      for (let i = 0; i + 1 < (pt.linha || []).length; i++) {
+        const [x1, y1] = [pwx(pt.linha[i][0]), pwy(pt.linha[i][1])], [x2, y2] = [pwx(pt.linha[i + 1][0]), pwy(pt.linha[i + 1][1])];
+        const L = (x2 - x1) ** 2 + (y2 - y1) ** 2 || 1, u = Math.max(0, Math.min(1, ((cx - x1) * (x2 - x1) + (cy - y1) * (y2 - y1)) / L));
+        const dd = Math.hypot(x1 + u * (x2 - x1) - cx, y1 + u * (y2 - y1) - cy);
+        if (dd < dm) { dm = dd; melhor = pt.chave; }
+      }
+    });
+    return melhor;
   }
   const xyCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   canvas.addEventListener('mousedown', (e) => {
@@ -200,6 +222,12 @@ export function criarPerfil(app) {
   canvas.addEventListener('mousemove', (e) => {
     if (cDrag) return;
     const r = canvas.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+    if (o.editar && !arrasteP) {
+      // mantém a alça visível enquanto o mouse está em cima dela
+      const sobre = geo?.pontas.find((pt) => pt.tipo === 'V' && pt.chave === pertoV && Math.hypot(pwx(pt.d) - cx, pwy(pt.c) - cy) <= 14);
+      const novo = sobre ? pertoV : contatoPerto(cx, cy);
+      if (novo !== pertoV) { pertoV = novo; draw(); }
+    }
     const alca = arrasteP || pontaEm(cx, cy);
     canvas.style.cursor = alca ? (alca.tipo === 'V' ? 'ns-resize' : 'ew-resize') : o.zoom > 1 ? 'grab' : 'default';
     const out = document.getElementById('sb-cursor');
@@ -208,7 +236,10 @@ export function criarPerfil(app) {
     const cota = ext.maxCota - ((cy - PMT) / (ppH() || 1)) * (ext.maxCota - ext.minCota);
     out.textContent = `d=${dist.toFixed(1)} m | ${o.axis === 'cota' ? 'cota=' + cota.toFixed(1) : 'prof=' + (ext.maxCota - cota).toFixed(1)} m`;
   });
-  canvas.addEventListener('mouseleave', () => { document.getElementById('sb-cursor').textContent = ''; });
+  canvas.addEventListener('mouseleave', () => {
+    document.getElementById('sb-cursor').textContent = '';
+    if (pertoV && !arrasteP) { pertoV = null; draw(); }
+  });
 
   return {
     draw,

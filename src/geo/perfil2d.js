@@ -290,7 +290,9 @@ export function geometriaPerfil(bhs, { ajustes = {}, modo = 'interpolado' } = {}
     seq.verticais.forEach((v) => {
       const lado = seq[v.k].tipo === 'B' ? '+' : '-';
       const c = cache.get(`${v.tH}${lado}`)[v.k].topo;
-      pontas.push({ chave: v.chave, d: D(v.tH), c, ponta: v.efetivo ?? 0, padrao: 0, tipo: 'V', vao: [dA, dB], codigo: seq[v.k].l.solo.code, fator: bossaV(v, v.tH, S) || 1 });
+      // o contato no trecho (para mostrar a alça quando o mouse passa perto dele)
+      const linha = ts.filter((t) => t >= v.a - 1e-12 && t <= v.b + 1e-12).map((t) => [D(t), cache.get(`${t}${lado}`)[v.k].topo]);
+      pontas.push({ chave: v.chave, d: D(v.tH), c, linha, ponta: v.efetivo ?? 0, padrao: 0, tipo: 'V', vao: [dA, dB], codigo: seq[v.k].l.solo.code, fator: bossaV(v, v.tH, S) || 1 });
     });
     // alça de cada transição lateral, no meio do trecho
     const grupos = [...new Set(seq.filter((it) => it.grupo).map((it) => it.grupo))];

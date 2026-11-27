@@ -484,7 +484,7 @@ const acoes = {
   editarContatos() {
     ui.perfil.editar = !ui.perfil.editar;
     $('btn-editar').classList.toggle('active', ui.perfil.editar);
-    if (ui.perfil.editar) toast('Alças ◆: arraste para os lados para mudar onde a camada acunha ou a transição. Alças ●: arraste para cima ou para baixo para mudar a espessura entre os furos. Duplo clique volta ao padrão.', 7000);
+    if (ui.perfil.editar) toast('Alças ◆: arraste para os lados para mudar onde a camada acunha ou a transição. Passe o mouse num contato para ver a alça ●: arraste para cima ou para baixo para mudar a espessura entre os furos. Duplo clique volta ao padrão.', 7000);
     perfil.draw();
   },
   // atalhos entre o Perfil 2D e o Modelo 3D (os dois usam o mesmo perfil do corte)
